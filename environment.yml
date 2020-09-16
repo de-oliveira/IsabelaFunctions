@@ -1,0 +1,10 @@
+name : IsabelaFunctions
+
+dependencies : 
+	- scipy
+	- numpy
+	- matplotlib
+
+
+
+

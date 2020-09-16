@@ -1,0 +1,12 @@
+README.md
+setup.cfg
+setup.py
+IsabelaFunctions/__init__.py
+IsabelaFunctions/fit.py
+IsabelaFunctions/shifting.py
+IsabelaFunctions/version.py
+IsabelaFunctions.egg-info/PKG-INFO
+IsabelaFunctions.egg-info/SOURCES.txt
+IsabelaFunctions.egg-info/dependency_links.txt
+IsabelaFunctions.egg-info/requires.txt
+IsabelaFunctions.egg-info/top_level.txt
