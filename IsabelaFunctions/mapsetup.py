@@ -3,7 +3,7 @@ import matplotlib.colors as colors
 import numpy as np
 
 
-def discrete_cmap(N, base_cmap=None):
+def discrete_cmap(N, base_cmap = None):
     """ Create an N-bin discrete colormap from the specified input map.
     
     Parameters:
@@ -25,7 +25,7 @@ def discrete_cmap(N, base_cmap=None):
 
 
 def resample_by_mean(x, y, z, xplim, yplim):
-    """ Resamples by nan-mean
+    """ Resamples by nan-mean.
 
     Parameters:
 
@@ -70,3 +70,41 @@ def resample_by_mean(x, y, z, xplim, yplim):
         yp[j] = (yplim[j]+yplim[j+1])/2
 
     return xp, yp, zp
+
+
+def zoom_in(file, lonlim, latlim, binsize = 0.5):
+    """ Zoom in a specific region in a lon x lat map.
+
+    Parameters:
+
+        file: N x M array
+            Matrix of latitutde and longitude coordinates.
+
+        binsize: float, optional
+            The bin size of the array in degrees (bin size of N = bin size of M). Default is 0.5.
+
+        lonlim: [a, b] array
+            Longitude coordinates to be zoomed in.
+
+        latlim: [c, d] array
+            Latitude coordinates to be zoomed in.
+
+    Returns:
+
+        zoom_file: N' < N x M' < M array
+            Matrix of latitutde and longitude coordinates of the zoomed region.
+            
+        coords: N x M array
+            Matrix of booleans, where True correspond to the coordinates of the zoomed region.
+    """
+    longitude = np.linspace(0., 360., int(360./binsize+1.))
+    latitude = np.linspace(-90., 90., int(180./binsize+1.))
+    
+    zoom_lon = np.logical_and(longitude >= lonlim[0], longitude <= lonlim[1])
+    zoom_lat = np.logical_and(latitude >= latlim[0], latitude <= latlim[1])
+    zoom_file = np.array(file[zoom_lat][:, zoom_lon])
+    
+    lats, lons = np.meshgrid(zoom_lon, zoom_lat)
+    coords = np.logical_and(lats, lons)
+    
+    return zoom_file, coords
