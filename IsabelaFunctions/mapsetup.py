@@ -108,3 +108,9 @@ def zoom_in(file, lonlim, latlim, binsize = 0.5):
     coords = np.logical_and(lats, lons)
     
     return zoom_file, coords
+
+
+def crop(file, x, y): 
+    cropped = file[y[0]:y[1]+1, x[0]:x[1]+1]
+    
+    return cropped

@@ -4,6 +4,10 @@ dependencies :
 	- scipy
 	- numpy
 	- matplotlib
+	- datetime
+	- copy
+	- os
+	- shutil
 
 
 
