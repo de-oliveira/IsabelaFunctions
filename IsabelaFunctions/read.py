@@ -1,3 +1,7 @@
+"""
+Reads IDL-generated files, e.g., files created in CCATi.
+"""
+
 import scipy as sp
 import scipy.io
 import numpy as np

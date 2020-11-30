@@ -177,12 +177,16 @@ def mag_components(lon, lat, alt, comp, nmax = 134):
     Parameters:
         lon: float
             The longitude, in degrees.
+            
         lat: float
             The latitude, in degrees.
+            
         alt: float
             The altitude, in km.
+            
         comp: string
             The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', and 'Bphi'.
+            
         nmax: integer, optional
             The maximum degree and order of the functions. Default (Langlais model) is 134.
         
@@ -226,14 +230,19 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
     Parameters:
         lon: array
             The longitude range, in degrees.
+            
         lat: array
             The latitude range, in degrees.
+            
         alt: float
             The altitude in which the map will be computed, in km.
+            
         comp: string
             The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', and 'Bphi'.
+            
         nmax: integer, optional
             The maximum degree and order of the functions. Default (Langlais model) is 134.
+            
         binsize: float, list, optional
             The resolution of the grid. If a float, apply the same binsize for longitude and latitude. 
             If a list, the first value represents the longitude binsize and the second, the latitude binsize. 
@@ -312,17 +321,4 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
             B[:, theta] /= sen_theta[theta]
         
     return B.T
-
-
-##############################################
-
-
-
-
-
-
-
-
-
-
 

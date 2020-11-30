@@ -1,3 +1,7 @@
+"""
+Computes different types of fits/regression for the data.
+"""
+
 import numpy as np
 from scipy.optimize import curve_fit
 

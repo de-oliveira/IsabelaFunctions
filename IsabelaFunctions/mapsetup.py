@@ -1,10 +1,14 @@
+"""
+Useful for the visualization of maps.
+"""
+
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import numpy as np
 
 
 def discrete_cmap(N, base_cmap = None):
-    """ Create an N-bin discrete colormap from the specified input map.
+    """ Create an N-bin discrete colormap from the specified input colormap.
     
     Parameters:
         N: integer
@@ -12,23 +16,23 @@ def discrete_cmap(N, base_cmap = None):
         
         base_map: string, optional
             Name of the base map, e.g., 'viridis'.
+            
+    Returns:
+        A colormap object.
     """
-
-    # Note that if base_cmap is a string or None, you can simply do
-    #    return plt.cm.get_cmap(base_cmap, N)
-    # The following works for string, None, or a colormap instance:
-
     base = plt.cm.get_cmap(base_cmap)
-    color_list = base(np.linspace(0, 1, N))
     cmap_name = base.name + str(N)
-    return colors.LinearSegmentedColormap.from_list(cmap_name, color_list, N)
+    
+    color_list = base(np.linspace(0, 1, N))
+    discrete_map = colors.LinearSegmentedColormap.from_list(cmap_name, color_list, N)
+    
+    return discrete_map
 
 
 def resample_by_mean(x, y, z, xplim, yplim):
-    """ Resamples by nan-mean.
+    """ Resamples a grid by nan-mean. Example: a 30 x 30 datapoints grid can be reduced to a 10 x 10 grid.
 
     Parameters:
-
         x: list or array
             X coordinates.
 
@@ -45,7 +49,6 @@ def resample_by_mean(x, y, z, xplim, yplim):
             Limits of y, such that [0, 1, 2, 3] returns values at 0.5, 1.5, and 2.5.
 
     Returns:
-
         xp: array
             Coordinates of resampled x.
 

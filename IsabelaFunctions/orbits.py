@@ -1,3 +1,7 @@
+"""
+Useful for the analysis and visualization of individual datapoints.
+"""
+
 import numpy as np
 import scipy as sp
 import scipy.io
@@ -674,11 +678,3 @@ def minres(alt, lon, lat, br, fn, anomaly, lim, Nrange, Erange, Rrange, Bext = 0
     rot0 = min0[2][0]*0.5 + Rrange[0]
     
     return matrix, min0, lat0, lon0, rot0
-    
-    
-    
-    
-    
-    
-    
-    

@@ -1,4 +1,4 @@
-# Contributing to mpsrad
+# Contributing to IsabelaFunctions
 Follow the below instructions
 
 ## Checklist
@@ -14,14 +14,14 @@ This checklist also serves as table of contents.
 9. [Follow up](#follow-up)
 
 ## Fork the project
-The first step is to fork the mpsrad project. This is done by clicking the Fork
+The first step is to fork the IsabelaFunctions project. This is done by clicking the Fork
 button on the project site.
 
 ## Clone the forked project
 After forking the project you can clone the project to create a local working
 copy.
 ```bash
-$ git clone https://github.com/YOUR_USERNAME/mpsrad.git
+$ git clone https://github.com/YOUR_USERNAME/IsabelaFunctions.git
 ```
 
 You can also connect to GitHub
@@ -31,23 +31,23 @@ You can also connect to GitHub
 Add the URL of the original project to your local repository to be able to pull
 changes from it:
 ```bash
-$ git remote add upstream https://github.com/riclarsson/mpsrad.git
+$ git remote add upstream https://github.com/de-oliveira/IsabelaFunctions.git
 ```
 
 Listing the remote repositories will show something like:
 ```bash
 $ git remote -v
-origin https://github.com/YOUR_USERNAME/mpsrad.git (fetch)
-origin https://github.com/YOUR_USERNAME/mpsrad.git (push)
-upstream https://github.com/riclarsson/mpsrad.git (fetch)
-upstream https://github.com/riclarsson/mpsrad.git (push)
+origin https://github.com/YOUR_USERNAME/IsabelaFunctions.git (fetch)
+origin https://github.com/YOUR_USERNAME/IsabelaFunctions.git (push)
+upstream https://github.com/de-oliveira/IsabelaFunctions.git (fetch)
+upstream https://github.com/de-oliveira/IsabelaFunctions.git (push)
 ```
 
 ## Update your fork
 Make sure to pull in changes from the upstream master branch at regular
 intervals to keep track of changes done to the project.
 We recommend to use the flag. This will replay your commits on top
-of the latest mpsrad git master and maintain a linear history.
+of the latest IsabelaFunctions git master and maintain a linear history.
 ```bash
 $ git pull upstream master
 ```
