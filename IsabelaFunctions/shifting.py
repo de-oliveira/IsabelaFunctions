@@ -419,3 +419,46 @@ def shifting_ribbon(model, dawn, dusk, lat, name = None, binsize = 0.5, thicknes
     
     return mins, error
 
+
+def orbit_residual(lon, lat, alt, br, anomaly, lim, fn):
+    """ Calculates the residuals of each magnetic field measurements and the total residual in nT.
+    
+   Parameters:
+        lon: 1D array
+            An array containing the longitude data.
+            
+        lat: 1D array
+            An array containing the latitude data.
+        
+        alt: 1D array
+            An array containing the altitude data.
+        
+        br: 1D array
+            An array containing the magnetic field data.
+        
+        anomaly: string
+            The anomaly index, e. g., A1, A2, A6, etc. This string is used to find the directory where the model matrices are located.
+        
+        lim: 4-elements array
+            An array cointaining the limits for latitude and longitude data, in which: [lon_min, lon_max, lat_min, lat_max].
+        
+        fn: function
+            A function that calculates the interpolated magnetic field model at a specific point. Can be created by IsabelaFunctions.read.crustal_model_files.
+            
+    Returns:
+        
+    """
+    res = np.empty((len(br))) * np.nan
+    
+    for i in range(len(br)):
+        if lon[i] >= lim[0] and lon[i] <= lim[1]:
+            if lat[i] >= lim[2] and lat[i] <= lim[3]:
+                model = fn([lon[i], lat[i], alt[i]])
+                res[i] = np.double(abs(br[i] - model))       
+    
+    count = np.count_nonzero(~np.isnan(res))
+    res_total = np.nansum(res)/count
+    
+    return res, res_total
+
+

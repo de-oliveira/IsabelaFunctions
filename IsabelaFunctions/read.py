@@ -1,6 +1,7 @@
 import scipy as sp
 import scipy.io
 import numpy as np
+from scipy.interpolate import RegularGridInterpolator as rgi
 
 
 def ccati_file(path, file, variable, ndata = True):
@@ -30,3 +31,42 @@ def ccati_file(path, file, variable, ndata = True):
     if ndata == True:
         samples = data['zcbins']
         np.save(variable + '_N', samples)
+
+    return
+
+
+def crustal_model_files(alt = [200, 1000], anomaly = 'Global', lim = [0., 360. -90., 90.], binsize = 0.1):
+    """"
+    Reads the .bin IDL files of the crustal magnetic field model (Langlais) for a range of altitudes and creates a function based on a linear interpolation.
+    
+    Parameters:
+        alt: 2-elements array, optional
+            The array containing the altitude range. Default is [200, 1000] km.
+            
+        anomaly: string, optional
+            The anomaly index, e. g., A1, A2, A6, etc. This string is used to find the directory where the model matrices are located. Default is 'Global'.
+           
+        lim: 4-elements array, optional
+            An array cointaining the limits for latitude and longitude data, in which: [lon_min, lon_max, lat_min, lat_max]. Default is the whole range of Mars.
+             
+        binsize: double, optional
+            The size of the lon and lat bins (must be the same size). Default is 0.1 degrees.
+            
+    Returns:
+        A function.
+    """
+    longitude = np.linspace(lim[0], lim[1], int((lim[1] - lim[0]) / binsize + 1))
+    latitude = np.linspace(lim[2], lim[3], int((lim[3] - lim[2]) / binsize + 1))
+    altitude = np.linspace(alt[0], alt[1], int(alt[1] - alt[0] + 1))
+    br = np.empty((len(longitude), len(latitude), len(altitude)))
+    
+    for i in range(len(altitude)):
+        h = int(i + alt[0])
+        data = sp.io.readsav('/home/oliveira/ccati_mexuser/LANGLAIS_Matrices/'+anomaly+'/LANGLAIS_BR_ALT_' + \
+                             str(h) + '_RES_01.bin')
+        br[:, :, i] = data['zbins'].T
+    
+    fn = rgi((longitude, latitude, altitude), br)
+       
+    return fn, br
+    
