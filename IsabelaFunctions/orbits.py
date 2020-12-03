@@ -90,6 +90,7 @@ def plot_altitude_model(new_alt, alt, lon, lat, br, anomaly, brange = None, lim 
     cbar.ax.tick_params(labelsize = f)
     
     plt.savefig('/home/oliveira/PythonScripts/Orbits/Altitudes/'+ anomaly +'/Orbit_' + anomaly + '_alt_' + str(new_alt) + '_' + title + '.pdf', bbox_inches = 'tight')
+    return
 
 
 def plot_altitude_range(alt_range, alt, lon, lat, br, anomaly, lim, brange = None, vaz = None, vpol = None, dawn = True):
@@ -330,8 +331,9 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, fn, vaz = 
         lim: 4-elements array
             An array cointaining the limits for latitude and longitude data, in which: [lon_min, lon_max, lat_min, lat_max].
         
-        fn: function
+        fn: function or matrix
             A function that calculates the interpolated magnetic field model at a specific point. Can be created by IsabelaFunctions.read.crustal_model_files.
+            A matrix contaning the magnetic field model data. Can be created by IsabelaFunctions.fieldmodel_model_map.
             
         vaz: 1D array, optional
             An array containing the azimuthal velocity data.
@@ -405,8 +407,8 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, fn, vaz = 
         vpol = np.full_like(br, np.nan)
     
     rot_lon, rot_lat = rot2D(lon+shifteast, lat+shiftnorth, rotate, p)
-    res, res_total = isa.shifting.orbit_residual(rot_lon, rot_lat, alt, br-Bext, anomaly, lim, fn)
-    res2, res_total2 = isa.shifting.orbit_residual(lon, lat, alt, br, anomaly, lim, fn)
+    res, res_total = isa.shifting.orbit_residual(rot_lon, rot_lat, alt, br-Bext, lim, fn)
+    res2, res_total2 = isa.shifting.orbit_residual(lon, lat, alt, br, lim, fn)
     
     if one_map == True:
         fig, axes = plt.subplots(1, 1, sharex = True, sharey = True, figsize = [8, 8])
@@ -430,8 +432,7 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, fn, vaz = 
             plt.text(lim[1]+0.5, lim[3]-2.0, 'Shift', c = 'dimgrey', fontsize = f, verticalalignment = 'center')
         
         heigth = int((np.max(alt) + np.min(alt)) // 2)
-        data = sp.io.readsav('/home/oliveira/ccati_mexuser/LANGLAIS_Matrices/' + anomaly + '/LANGLAIS_BR_ALT_' + str(heigth) + '_RES_01.bin')
-        brmodel = data['zbins']
+        brmodel = isa.fieldmodel.model_map([lim[0], lim[1]], [lim[2], lim[3]], heigth, 'Br')
     
         p1 = plt.scatter(lon, lat, c = br, cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax), edgecolors = 'black')
         im = plt.imshow(brmodel, extent = lim, origin = 'lower', cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax))
@@ -481,8 +482,7 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, fn, vaz = 
                 plt.xlabel('Longitude ($\degree$)', fontsize = f)
                 plt.xticks(fontsize = f)
                 
-                data = sp.io.readsav('/home/oliveira/ccati_mexuser/LANGLAIS_Matrices/'+anomaly+'/LANGLAIS_BR_ALT_' + str(int(round(alt[i]))) + '_RES_01.bin')
-                brmodel = data['zbins']
+                brmodel = isa.fieldmodel.model_map([lim[0], lim[1]], [lim[2], lim[3]], heigth, 'Br')
                     
                 window = np.around(abs(br[i]-Bext))*sigma
                 
@@ -538,8 +538,7 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, fn, vaz = 
                 plt.xlabel('Longitude ($\degree$)', fontsize = f)
                 plt.xticks(fontsize = f)
                 
-                data = sp.io.readsav('/home/oliveira/ccati_mexuser/LANGLAIS_Matrices/'+anomaly+'/LANGLAIS_BR_ALT_' + str(int(round(alt[i]))) + '_RES_01.bin')
-                brmodel = data['zbins']
+                brmodel = isa.fieldmodel.model_map([lim[0], lim[1]], [lim[2], lim[3]], heigth, 'Br')
                         
                 p1 = plt.scatter(lon[i], lat[i], c = br[i], cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax), edgecolors = 'black')
                 im = plt.imshow(brmodel, extent = lim, origin = 'lower', cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax))
@@ -629,6 +628,10 @@ def minres(alt, lon, lat, br, fn, anomaly, lim, Nrange, Erange, Rrange, Bext = 0
         br: 1D array
             An array containing the magnetic field data.
         
+        fn: function or str
+            A function that calculates the interpolated magnetic field model at a specific point. Can be created by IsabelaFunctions.read.crustal_model_files.
+            If str, the magnetic field components are calculated by IsabelaFunctions.fieldmodel.mag_components, and the component is defined by the string ('Br', 'Btheta', or 'Bphi').
+        
         anomaly: string
             The anomaly index, e. g., A1, A2, A6, etc. This string is used to find the directory where the model matrices are located.
         
@@ -669,7 +672,7 @@ def minres(alt, lon, lat, br, fn, anomaly, lim, Nrange, Erange, Rrange, Bext = 0
         for j in range(Elen):
             for i in range(Nlen):
                 rot_lon, rot_lat = rot2D(lon+east[j], lat+north[i], angle[k], p)
-                res, total = isa.shifting.orbit_residual(rot_lon, rot_lat, alt, br-Bext, anomaly, lim, fn)
+                res, total = isa.shifting.orbit_residual(rot_lon, rot_lat, alt, br-Bext, lim, fn)
                 matrix[i, j, k] = total
     
     min0 = np.where(matrix == np.nanmin(matrix))
@@ -678,3 +681,83 @@ def minres(alt, lon, lat, br, fn, anomaly, lim, Nrange, Erange, Rrange, Bext = 0
     rot0 = min0[2][0]*0.5 + Rrange[0]
     
     return matrix, min0, lat0, lon0, rot0
+
+
+def index_orbit(alt, lon, lat, br, lt, sza, vaz, vpol, date):
+    """ Separates the data set in sets of orbits.
+    
+    Parameters:
+        alt: 1D array
+            An array containing the altitude data.
+            
+        lon: 1D array
+            An array containing the longitude data.
+            
+        lat: 1D array
+            An array containing the latitude data.
+            
+        br: 1D array
+            An array containing the magnetic field data.
+        
+        lt: 1D array
+            An array containing the local time data.
+            
+        sza: 1D array
+            An array containing the solar zenith angle data.
+            
+        vaz: 1D array, optional
+            An array containing the azimuthal velocity data.
+            
+        vpol: 1D array, optional
+            An array containing the polar velocity data. If vaz AND vpol ARE NOT None, arrows showing the horizontal velocity will be plotted.
+
+        date: 1D array
+            An array containing the date/time data.
+    
+    Returns:
+        9 lists containing the orbits data for each input parameter.
+    """
+    list_date = []
+    list_alt = []
+    list_lon = []
+    list_lat = []
+    list_sza = []
+    list_lt = []
+    list_vaz = []
+    list_vpol = []
+    list_br = []
+    
+    j = 0
+    for i in range(len(date)-1):
+        delta = date[i+1] - date[i]
+        
+        # If the time difference is greater than 2 hours
+        if delta.total_seconds() > 60*60*2:
+            list_date.append(date[j:i+1])
+            list_alt.append(alt[j:i+1])
+            list_lon.append(lon[j:i+1])
+            list_lat.append(lat[j:i+1])
+            list_sza.append(sza[j:i+1])
+            list_lt.append(lt[j:i+1])
+            list_vaz.append(vaz[j:i+1])
+            list_vpol.append(vpol[j:i+1])
+            list_br.append(br[j:i+1])
+            
+            j = i+1
+    
+    for i in reversed(range(len(list_date))):
+        
+        # If there are less than 10 elements in the orbit, remove it
+        if len(list_date[i]) < 10:
+            list_date.pop(i)
+            list_alt.pop(i)
+            list_lon.pop(i)
+            list_lat.pop(i)
+            list_sza.pop(i)
+            list_lt.pop(i)
+            list_vaz.pop(i)
+            list_vpol.pop(i)
+            list_br.pop(i)
+            
+    return list_alt, list_lon, list_lat, list_br, list_lt, list_sza, list_vaz, list_vpol, list_date
+

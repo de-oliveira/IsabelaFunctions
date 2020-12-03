@@ -57,7 +57,7 @@ def crustal_model_files(alt = [200, 1000], anomaly = 'Global', lim = [0., 360. -
             The size of the lon and lat bins (must be the same size). Default is 0.1 degrees.
             
     Returns:
-        A function.
+        A function and a matrix containing the data.
     """
     longitude = np.linspace(lim[0], lim[1], int((lim[1] - lim[0]) / binsize + 1))
     latitude = np.linspace(lim[2], lim[3], int((lim[3] - lim[2]) / binsize + 1))

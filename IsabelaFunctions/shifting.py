@@ -62,7 +62,7 @@ def shifting_technique(BM, BO, N = 10, region = None):
     return total_sum
 
 
-def orbit_residual(lon, lat, alt, br, anomaly, lim, fn):
+def orbit_residual(lon, lat, alt, br, lim, fn):
     """ Calculates the residuals of each magnetic field measurements and the total residual in nT.
     
    Parameters:
@@ -78,27 +78,34 @@ def orbit_residual(lon, lat, alt, br, anomaly, lim, fn):
         br: 1D array
             An array containing the magnetic field data.
         
-        anomaly: string
-            The anomaly index, e. g., A1, A2, A6, etc. This string is used to find the directory where the model matrices are located.
-        
         lim: 4-elements array
             An array cointaining the limits for latitude and longitude data, in which: [lon_min, lon_max, lat_min, lat_max].
         
-        fn: function
+        fn: function or str
             A function that calculates the interpolated magnetic field model at a specific point. Can be created by IsabelaFunctions.read.crustal_model_files.
+            If str, the magnetic field components are calculated by IsabelaFunctions.fieldmodel.mag_components, and the component is defined by the string ('Br', 'Btheta', or 'Bphi').
             
     Returns:
         A matrix containing the residuals.
         
         The total of the residuals (float).
     """
-    res = np.empty((len(br))) * np.nan
+    res = np.empty((len(alt))) * np.nan
+    string = isinstance(fn, str)
     
-    for i in range(len(br)):
-        if lon[i] >= lim[0] and lon[i] <= lim[1]:
-            if lat[i] >= lim[2] and lat[i] <= lim[3]:
-                model = fn([lon[i], lat[i], alt[i]])
-                res[i] = np.double(abs(br[i] - model))       
+    # If fn is a string
+    if string is True:
+        model = isa.fieldmodel.mag_components(lon, lat, alt, fn)
+        res = np.double(abs(br - model))
+
+    else: # If fn is a function
+        for i in range(len(alt)):
+        
+        # If data is within the limits
+            if lon[i] >= lim[0] and lon[i] <= lim[1]:
+                if lat[i] >= lim[2] and lat[i] <= lim[3]:
+                    model = fn([lon[i], lat[i], alt[i]])    
+                    res[i] = np.double(abs(br[i] - model))       
     
     count = np.count_nonzero(~np.isnan(res))
     res_total = np.nansum(res)/count

@@ -16,9 +16,6 @@
 
 import pyshtools as sh
 import numpy as np
-import scipy as sp
-import scipy.io
-import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
@@ -175,13 +172,13 @@ def mag_components(lon, lat, alt, comp, nmax = 134):
     Calculates the magnetic field component (Br, Btheta or Bphi) of the crustal field model for one set of aerographic coordinates.
     
     Parameters:
-        lon: float
+        lon: float or array
             The longitude, in degrees.
             
-        lat: float
+        lat: float or array
             The latitude, in degrees.
             
-        alt: float
+        alt: float or array
             The altitude, in km.
             
         comp: string
@@ -191,7 +188,7 @@ def mag_components(lon, lat, alt, comp, nmax = 134):
             The maximum degree and order of the functions. Default (Langlais model) is 134.
         
     Returns:
-        Three arrays containing the magnetic field components Br, Btheta and Bphi.        
+        A float or an array containing the magnetic field component Br, Btheta, or Bphi.        
     """
     # Raise an AssertionError if component is invalid
     assert comp == 'Br' or comp == 'Btheta' or comp == 'Bphi', "Check argument for comp"
@@ -205,20 +202,53 @@ def mag_components(lon, lat, alt, comp, nmax = 134):
     
     # Calculate r, theta, phi, and the Legendre functions
     r = a + alt
-    phi = np.deg2rad(lon)
-    theta = np.deg2rad(90.0 - lat)
-    P, dP = legendre_schmidt_Pyshtools(lat, nmax)
+    l = len(lon)
+    
+    P = np.empty((nmax+1, nmax+1, l)) * np.nan
+    dP = np.empty_like(P) * np.nan
+    for theta in range(l):
+        P[:, :, theta], dP[:, :, theta] = legendre_schmidt_Pyshtools(lat[theta], nmax)
+    
+    cos = np.empty((nmax+1, l)) * np.nan
+    sen = np.empty_like(cos) * np.nan
+    for phi in range(l):
+        for m in range(nmax+1):
+            cos[m, phi] = np.cos(m * np.deg2rad(lon[phi]))
+            sen[m, phi] = np.sin(m * np.deg2rad(lon[phi]))
+   
+    a_over_r = np.empty((nmax+1, l)) * np.nan
+    for radius in range (l):
+        for n in range(nmax+1):
+            a_over_r[n, radius] = (a/r[radius])**(n+2)
     
     # Calculate Br, Btheta, Bphi
+    B = np.zeros(l)
+    
     if comp == 'Br':
-        B = sum((n+1) * (a/r)**(n+2) * (g[n, m] * np.cos(m * phi) + h[n, m] * np.sin(m * phi)) * P[n, m] \
-                for n in range(1, nmax+1) for m in range(n+1))
+        for i in range(l):
+            for n in range(1, nmax+1):
+                for m in range(n+1):
+                    tmp = (g[n, m] * cos[m, i] + h[n, m] * sen[m, i]) * P[n, m, i] * (n+1) * a_over_r[n, i]
+                    B[i] += tmp
+    
     elif comp == 'Btheta':
-        B = sum((a/r)**(n+2) * (g[n, m] * np.cos(m * phi) + h[n, m] * np.sin(m * phi)) * \
-                np.sin(theta) * dP[n, m] for n in range(1, nmax+1) for m in range(n+1))
+        sen_theta = np.sin(np.deg2rad(90.0 - lat))
+        for i in range(l):
+            for n in range(1, nmax+1):
+                for m in range(n+1):
+                    tmp = (g[n, m] * cos[m, i] + h[n, m] * sen[m, i]) * dP[n, m, i] * sen_theta[i] * a_over_r[n, i]
+                    B[i] += tmp
+        
     else:
-        B = 1/np.sin(theta) * sum((a/r)**(n+2) * P[n, m] * m * (g[n, m] * np.sin(m * phi) - h[n, m] * \
-                 np.cos(m * phi)) for n in range(1, nmax+1) for m in range(n+1))
+        sen_theta = np.sin(np.deg2rad(90.0 - lat))
+        for i in range(l):
+            for n in range(1, nmax+1):
+                for m in range(n+1):
+                    tmp = (g[n, m] * sen[m, i] + h[n, m] * cos[m, i]) * P[n, m, i] * m * a_over_r[n, i]
+                    B += tmp
+        
+            for theta in range(l):
+                B[theta] /= sen_theta[theta]
 
     return B
             
@@ -267,8 +297,8 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
     if type(binsize) is float:
         binsize = [binsize, binsize]
     
-    lat_len = int((lat[1] - lat[0]) / binsize[1] + 1.0)
-    lon_len = int((lon[1] - lon[0]) / binsize[0] + 1.0)
+    lat_len = round((lat[1] - lat[0]) / binsize[1] + 1.0)
+    lon_len = round((lon[1] - lon[0]) / binsize[0] + 1.0)
         
     longitude = np.deg2rad(np.linspace(lon[0], lon[1], lon_len))
     latitude = np.linspace(lat[0], lat[1], lat_len)
@@ -284,8 +314,6 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
         for m in range(nmax+1):
             cos[m, phi] = np.cos(m * longitude[phi])
             sen[m, phi] = np.sin(m * longitude[phi])
-        
-    sen_theta = np.sin(np.deg2rad(90.0 - latitude))
     
     a_over_r = np.empty((nmax+1)) * np.nan
     for n in range(nmax+1):
@@ -302,6 +330,7 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
                 B += tmp3
     
     elif comp == 'Btheta':
+        sen_theta = np.sin(np.deg2rad(90.0 - latitude))
         for n in tqdm(range(1, nmax+1)):
             for m in range(n+1):
                 tmp1 = g[n, m] * cos[m, :] + h[n, m] * sen[m, :]
@@ -310,6 +339,7 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
                 B += tmp3
         
     else:
+        sen_theta = np.sin(np.deg2rad(90.0 - latitude))
         for n in tqdm(range(1, nmax+1)):
             for m in range(n+1):
                 tmp1 = g[n, m] * sen[m, :] + h[n, m] * cos[m, :]
