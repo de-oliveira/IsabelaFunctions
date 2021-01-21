@@ -29,25 +29,28 @@ def discrete_cmap(N, base_cmap = None):
     return discrete_map
 
 
-def resample_by_mean(x, y, z, xplim, yplim):
+def resample_by_mean(x, y, z, xplim, yplim, median = False):
     """ Resamples a grid by nan-mean. Example: a 30 x 30 datapoints grid can be reduced to a 10 x 10 grid.
 
     Parameters:
         x: list or array
-            X coordinates.
+            X original coordinates.
 
         y: list or array
-            Y coordinates.
+            Y original coordinates.
 
         z: 2D array
             Data points.
 
         xplim: list or array
-            Limits of x, such that [0, 1, 2] returns values at 0.5 and 1.5.
+            New limits of x, such that [0, 1, 2] returns values at 0.5 and 1.5.
 
         yplim: list or array
-            Limits of y, such that [0, 1, 2, 3] returns values at 0.5, 1.5, and 2.5.
-
+            New limits of y, such that [0, 1, 2, 3] returns values at 0.5, 1.5, and 2.5.
+        
+        median: bool, optional
+            If True, resamples by median instead of by mean. Default is False.
+            
     Returns:
         xp: array
             Coordinates of resampled x.
@@ -64,15 +67,67 @@ def resample_by_mean(x, y, z, xplim, yplim):
     zp = np.zeros(shape = (ny, nx))
     xp = np.zeros(shape = (nx))
     yp = np.zeros(shape = (ny))
-    for i in range(nx):
+    
+    if median is False:
+        for i in range(nx):
+            for j in range(ny):
+                zp[j, i] = np.nanmean(z[np.logical_and(y<yplim[j+1], y>=yplim[j])][:, np.logical_and(x<xplim[i+1], x>=xplim[i])])
+        for i in range(nx):
+            xp[i] = (xplim[i]+xplim[i+1])/2
         for j in range(ny):
-            zp[j, i] = np.nanmean(z[np.logical_and(y<yplim[j+1], y>=yplim[j])][:, np.logical_and(x<xplim[i+1], x>=xplim[i])])
-    for i in range(nx):
-        xp[i] = (xplim[i]+xplim[i+1])/2
-    for j in range(ny):
-        yp[j] = (yplim[j]+yplim[j+1])/2
+            yp[j] = (yplim[j]+yplim[j+1])/2
 
+    else:
+        for i in range(nx):
+            for j in range(ny):
+                zp[j, i] = np.nanmedian(z[np.logical_and(y<yplim[j+1], y>=yplim[j])][:, np.logical_and(x<xplim[i+1], x>=xplim[i])])
+        for i in range(nx):
+            xp[i] = (xplim[i]+xplim[i+1])/2
+        for j in range(ny):
+            yp[j] = (yplim[j]+yplim[j+1])/2
+            
     return xp, yp, zp
+
+
+def resample_1D(x, y, xplim, median = False):
+    """ Resamples a 1D array by nan-mean. Example: an array with 30 datapoints can be reduced to 10 datapoints.
+
+    Parameters:
+        x: list or array
+            X original coordinates.
+
+        y: list or array
+            Datapoints.
+
+        xplim: list or array
+            New limits of x, such that [0, 1, 2] returns values at 0.5 and 1.5.
+ 
+        median: bool, optional
+            If True, resamples by median instead of by mean. Default is False.
+            
+    Returns:
+        xp: array
+            Coordinates of resampled x.
+
+        yp: array
+            Values after resample.
+    """
+    nx = len(xplim)-1
+   
+    yp = np.empty(nx)
+    xp = np.empty(nx)
+    
+    if median is False:
+        for i in range(nx):
+           yp[i] = np.nanmean(y[np.logical_and(x < xplim[i+1], x >= xplim[i])])
+           xp[i] = (xplim[i] + xplim[i+1]) / 2
+
+    else:
+        for i in range(nx):
+           yp[i] = np.nanmedian(y[np.logical_and(x < xplim[i+1], x >= xplim[i])])
+           xp[i] = (xplim[i] + xplim[i+1]) / 2
+            
+    return xp, yp
 
 
 def zoom_in(file, lonlim, latlim, binsize = 0.5):

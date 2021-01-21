@@ -19,37 +19,48 @@ import numpy as np
 from tqdm import tqdm
 
 
-def legendre_schmidt_Pyshtools(lat, nmax = 134):
+def legendre_schmidt_Pyshtools(lat):
     """
-    Uses the pyshtools package to compute the Schmidt semi-normalized associated Legendre functions of the cosine of the colatitude.
+    Uses the pyshtools package to compute the Schmidt semi-normalized associated Legendre functions of the cosine of the colatitude, with nmax = 134 (Langlais model),
     
     Parameters:
         lat: float
             The latitude, in degrees.
             
-        nmax: integer, optional
-            The maximum degree and order of the functions. Default (Langlais model) is 134.
-            
     Returns:
-        P: nmax+1 X nmax+1 array containing the associated Legendre functions.
-        dP: nmax+1 X nmax+1 array containing the first derivatives of the functions.
+        P: 135 X 135 array containing the associated Legendre functions.
+        dP: 135 X 135 array containing the first derivatives of the functions.
         
     """
+    nmax = 134
     theta = np.deg2rad(90.0 - lat)
-    P0, dP0 = sh.legendre.PlmSchmidt_d1(nmax, np.cos(theta))
     
-    P = np.zeros((nmax+1, nmax+1))
-    dP = np.zeros((nmax+1, nmax+1))
-    
-    i = 0
-    for n in range(nmax+1):
-        for m in range(n+1):
-            P[n, m] = P0[i]
-            dP[n, m] = dP0[i]
-            i += 1
-    
-    del P0, dP0
-    
+    if np.isscalar(lat):
+        P0, dP0 = sh.legendre.PlmSchmidt_d1(nmax, np.cos(theta))
+        
+        P = np.zeros((nmax+1, nmax+1))
+        dP = np.zeros((nmax+1, nmax+1))
+        
+        i = 0
+        for n in range(nmax+1):
+            for m in range(n+1):
+                P[n, m] = P0[i]
+                dP[n, m] = dP0[i]
+                i += 1
+    else:
+        P = np.zeros((nmax+1, nmax+1, len(lat)))
+        dP = np.zeros((nmax+1, nmax+1, len(lat)))
+        
+        for k in range(len(lat)):
+            P0, dP0 = sh.legendre.PlmSchmidt_d1(nmax, np.cos(theta[k]))
+            
+            i = 0
+            for n in range(nmax+1):
+                for m in range(n+1):
+                    P[n, m, k] = P0[i]
+                    dP[n, m, k] = dP0[i]
+                    i += 1
+        
     return P, dP
 
 
@@ -167,9 +178,9 @@ def legendre_schmidt_ChaosMagPy(theta, nmax):
     return Pnm
     
 
-def mag_components(lon, lat, alt, comp, nmax = 134):
+def mag_components(lon, lat, alt, comp):
     """
-    Calculates the magnetic field component (Br, Btheta or Bphi) of the crustal field model for one set of aerographic coordinates.
+    Calculates the magnetic field component (Br, Btheta, Bphi, or Bt) of the crustal field model for one set of aerographic coordinates.
     
     Parameters:
         lon: float or array
@@ -182,16 +193,13 @@ def mag_components(lon, lat, alt, comp, nmax = 134):
             The altitude, in km.
             
         comp: string
-            The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', and 'Bphi'.
+            The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', 'Bphi', and 'Bt.
             
-        nmax: integer, optional
-            The maximum degree and order of the functions. Default (Langlais model) is 134.
-        
     Returns:
-        A float or an array containing the magnetic field component Br, Btheta, or Bphi.        
+        A float or an array containing the magnetic field component Br, Btheta, Bphi, or Bt.        
     """
     # Raise an AssertionError if component is invalid
-    assert comp == 'Br' or comp == 'Btheta' or comp == 'Bphi', "Check argument for comp"
+    assert comp == 'Br' or comp == 'Btheta' or comp == 'Bphi' or comp == 'Bt', "Check argument for comp"
     
     # Import the coefficient files
     from IsabelaFunctions.langlais_coeff import glm as g
@@ -199,15 +207,13 @@ def mag_components(lon, lat, alt, comp, nmax = 134):
     
     # Mars' radius
     a = 3393.5
+    nmax = 134
     
     # Calculate r, theta, phi, and the Legendre functions
     r = a + alt
     l = len(lon)
     
-    P = np.empty((nmax+1, nmax+1, l)) * np.nan
-    dP = np.empty_like(P) * np.nan
-    for theta in range(l):
-        P[:, :, theta], dP[:, :, theta] = legendre_schmidt_Pyshtools(lat[theta], nmax)
+    P, dP = legendre_schmidt_Pyshtools(lat)
     
     cos = np.empty((nmax+1, l)) * np.nan
     sen = np.empty_like(cos) * np.nan
@@ -221,39 +227,48 @@ def mag_components(lon, lat, alt, comp, nmax = 134):
         for n in range(nmax+1):
             a_over_r[n, radius] = (a/r[radius])**(n+2)
     
-    # Calculate Br, Btheta, Bphi
-    B = np.zeros(l)
-    
-    if comp == 'Br':
-        for i in range(l):
-            for n in range(1, nmax+1):
-                for m in range(n+1):
-                    tmp = (g[n, m] * cos[m, i] + h[n, m] * sen[m, i]) * P[n, m, i] * (n+1) * a_over_r[n, i]
-                    B[i] += tmp
-    
-    elif comp == 'Btheta':
+    # Calculate Br, Btheta, Bphi, Bt
+    if comp == 'Bt':
+        Br = np.zeros(l)
+        Btheta = np.zeros(l)
+        Bphi = np.zeros(l)
         sen_theta = np.sin(np.deg2rad(90.0 - lat))
-        for i in range(l):
-            for n in range(1, nmax+1):
+        
+        for n in range(1, nmax+1):
                 for m in range(n+1):
-                    tmp = (g[n, m] * cos[m, i] + h[n, m] * sen[m, i]) * dP[n, m, i] * sen_theta[i] * a_over_r[n, i]
-                    B[i] += tmp
+                    Br += (g[n, m] * cos[m] + h[n, m] * sen[m]) * P[n, m] * (n+1) * a_over_r[n]
+                    Btheta += (g[n, m] * cos[m] + h[n, m] * sen[m]) * dP[n, m] * sen_theta * a_over_r[n]
+                    Bphi += (g[n, m] * sen[m] + h[n, m] * cos[m]) * P[n, m] * m * a_over_r[n]
+        Bphi /= sen_theta 
+        
+        B = np.sqrt(Br**2 + Btheta**2 + Bphi**2)
         
     else:
-        sen_theta = np.sin(np.deg2rad(90.0 - lat))
-        for i in range(l):
+        B = np.zeros(l)
+        
+        if comp == 'Br':
             for n in range(1, nmax+1):
                 for m in range(n+1):
-                    tmp = (g[n, m] * sen[m, i] + h[n, m] * cos[m, i]) * P[n, m, i] * m * a_over_r[n, i]
-                    B += tmp
+                    B += (g[n, m] * cos[m] + h[n, m] * sen[m]) * P[n, m] * (n+1) * a_over_r[n]
         
-            for theta in range(l):
-                B[theta] /= sen_theta[theta]
-
+        elif comp == 'Btheta':
+            sen_theta = np.sin(np.deg2rad(90.0 - lat))
+            for n in range(1, nmax+1):
+                for m in range(n+1):
+                    B += (g[n, m] * cos[m] + h[n, m] * sen[m]) * dP[n, m] * sen_theta * a_over_r[n]  
+            
+        elif comp == 'Bphi':
+            sen_theta = np.sin(np.deg2rad(90.0 - lat))
+            for n in range(1, nmax+1):
+                for m in range(n+1):
+                    B += (g[n, m] * sen[m] + h[n, m] * cos[m]) * P[n, m] * m * a_over_r[n]
+            
+            B /= sen_theta
+    
     return B
             
 
-def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
+def model_map(lon, lat, alt, comp, binsize = 0.1):
     """
     Calculates a map of one component of the crustal magnetic field field model, for a given altitude.
     
@@ -269,9 +284,6 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
             
         comp: string
             The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', and 'Bphi'.
-            
-        nmax: integer, optional
-            The maximum degree and order of the functions. Default (Langlais model) is 134.
             
         binsize: float, list, optional
             The resolution of the grid. If a float, apply the same binsize for longitude and latitude. 
@@ -290,6 +302,7 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
     
     # Mars' radius
     a = 3393.5
+    nmax = 134
     
     # Calculate r, theta, phi, and the Legendre functions
     r = a + alt
@@ -306,7 +319,7 @@ def model_map(lon, lat, alt, comp, nmax = 134, binsize = 0.1):
     P = np.empty((nmax+1, nmax+1, lat_len)) * np.nan
     dP = np.empty_like(P) * np.nan
     for theta in range(lat_len):
-        P[:, :, theta], dP[:, :, theta] = legendre_schmidt_Pyshtools(latitude[theta], nmax)
+        P[:, :, theta], dP[:, :, theta] = legendre_schmidt_Pyshtools(latitude[theta])
     
     cos = np.empty((nmax+1, lon_len)) * np.nan
     sen = np.empty_like(cos) * np.nan
