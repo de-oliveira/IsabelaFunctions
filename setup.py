@@ -39,10 +39,7 @@ setuptools.setup(
         "scipy",
         "numpy",
         "matplotlib",
-        "copy",
         "pyshtools",
-        "datetime",
-        "os",
     ],
 
 )
