@@ -17,6 +17,7 @@
 import pyshtools as sh
 import numpy as np
 from tqdm import tqdm
+from enum import Enum
 
 
 def legendre_schmidt_Pyshtools(lat):
@@ -24,7 +25,7 @@ def legendre_schmidt_Pyshtools(lat):
     Uses the pyshtools package to compute the Schmidt semi-normalized associated Legendre functions of the cosine of the colatitude, with nmax = 134 (Langlais model),
     
     Parameters:
-        lat: float
+        lat: float or array
             The latitude, in degrees.
             
     Returns:
@@ -66,8 +67,7 @@ def legendre_schmidt_Pyshtools(lat):
 
 def legendre_schmidt_Brain(lat, nmax = 134):
     """
-    Uses the David Brain's approach (CCATi -  mars_crust_model.pro) to compute the Schmidt semi-normalized associated Legendre functions.
-    Not used. Use legendre_schmidt_Pyshtools instead.
+    Uses the David Brain's approach (CCATi -  mars_crust_model.pro) to compute the Schmidt semi-normalized associated Legendre functions and its derivatives.
     
     Parameters:
         lat: float
@@ -77,20 +77,27 @@ def legendre_schmidt_Brain(lat, nmax = 134):
             The maximum degree and order of the functions.
             
     Returns:
-        P: nmax+1 X nmax+1 array containing the associated Legendre functions.
+        P, dP: nmax+1 X nmax+1 arrays containing the associated Legendre functions and its derivatives, respectively.
         
     """
     theta = np.deg2rad(90.0 - lat)
     x = np.cos(theta)
     P = np.zeros((nmax+1, nmax+1))
+    dP = np.zeros((nmax+1, nmax+1))
     
     P[0, 0] = 1.0
     P[1, 0] = x
     P[1, 1] = - np.sqrt(1 - x**2)
+    dP[0, 0] = 0.0
+    dP[1, 0] = 1.0
     
     for n in range(2, nmax+1):
         P[n, 0] = ((2*(n-1)+1) * x * P[n-1, 0] - (n-1) * P[n-2, 0])/n
-        
+    
+    dP[nmax, 0] = nmax / (x**2 - 1) * (x * P[nmax, 0] - P[nmax-1, 0])
+    for n in range(2, nmax):
+        dP[n, 0] = (n+1) / (x**2 - 1) * (P[n+1, 0] - x * P[n, 0])
+    
     Cm = np.sqrt(2.0)
     for m in range(1, nmax+1):
         Cm /=  np.sqrt(2.0*m * (2.0*m - 1.0))
@@ -98,14 +105,58 @@ def legendre_schmidt_Brain(lat, nmax = 134):
         
         for i in range(1, m):
             P[m, m] *= (2.0*i + 1.0)
-       
+        
+        dP[m, m] = -P[m, m] * m * x / np.sqrt(1 - x**2)
+                
         if nmax > m:
             twoago = 0.0
             for n in range(m+1, nmax+1):
-                P[n, m] = (x * (2.0*n - 1.0) * P[n-1, m] - np.sqrt((n+m-1.0) * (n-m-1.0)) * twoago) / np.sqrt((n**2 - m**2))
+                P[n, m] = (x * (2.0*n - 1.0) * P[n-1, m] - np.sqrt((n+m-1.0) * (n-m-1.0)) * twoago) / np.sqrt(n**2 - m**2)
                 twoago = P[n-1, m]
-                
-    return P
+    
+    for n in range(2, nmax+1):
+        for m in range(1, n):
+            dP[n, m] = np.sqrt((n-m) * (n+m+1)) * P[n, m+1] - P[n, m] * m * x / np.sqrt(1 - x**2)
+        
+    return P, dP
+
+
+def legendre_schmidt_derivatives(P, lat, nmax = 134):
+    """
+    Computes the derivatives of the associated Legendre functions. Use this code if you are computing the functions with legendre_schmidt_Brain.
+    
+    Parameters:
+        P: nmax+1 X nmax+1 array
+            The array containing the associated Legendre functions.
+            
+        lat: float
+            The latitude, in degrees.
+            
+        nmax: integer
+            The maximum degree and order of the functions.
+            
+    Returns:
+        dP: nmax+1 X nmax+1 array containing the derivatives of the associated Legendre functions.
+        
+    """
+    theta = np.deg2rad(90.0 - lat)
+    x = np.cos(theta)
+    dP = np.zeros((nmax+1, nmax+1))
+    
+    dP[0, 0] = 0.0
+    dP[1, 0] = 1.0
+    dP[nmax, 0] = nmax / (x**2 - 1) * (x * P[nmax, 0] - P[nmax-1, 0])
+    
+    for n in range(2, nmax):
+        dP[n, 0] = (n+1) / (x**2 - 1) * (P[n+1, 0] - x * P[n, 0])
+        
+    for n in range(1, nmax+1):
+        for m in range(1, nmax): # does not work!!
+            #dP[n, m] = -1 / (x**2 - 1) * ((n + m) * (n - m + 1) * np.sqrt(1 - x**2) * P[n, m-1] + m * x * P[n, m])
+            #dP[n, m] = 1 / (x**2 - 1) * ((n + 1) * x * P[n, m] + (n + 1 - m) * P[n+1, m])
+            dP[n, m] = 1 / (2 * np.sqrt(1 - x**2)) * ((n + m) * (n - m + 1) * P[n, m-1] - P[n, m+1])
+    
+    return dP
     
 
 def legendre_schmidt_ChaosMagPy(theta, nmax):
@@ -211,7 +262,10 @@ def mag_components(lon, lat, alt, comp):
     
     # Calculate r, theta, phi, and the Legendre functions
     r = a + alt
-    l = len(lon)
+    if hasattr(lon, '__len__') is False:
+        l = 1
+    else:
+        l = len(lon)
     
     P, dP = legendre_schmidt_Pyshtools(lat)
     
@@ -219,14 +273,22 @@ def mag_components(lon, lat, alt, comp):
     sen = np.empty_like(cos) * np.nan
     for phi in range(l):
         for m in range(nmax+1):
-            cos[m, phi] = np.cos(m * np.deg2rad(lon[phi]))
-            sen[m, phi] = np.sin(m * np.deg2rad(lon[phi]))
+            if np.isscalar(lon) is True:
+                cos[m, phi] = np.cos(m * np.deg2rad(lon))
+                sen[m, phi] = np.sin(m * np.deg2rad(lon))
+            else:
+                cos[m, phi] = np.cos(m * np.deg2rad(lon[phi]))
+                sen[m, phi] = np.sin(m * np.deg2rad(lon[phi]))
    
     a_over_r = np.empty((nmax+1, l)) * np.nan
-    for radius in range (l):
+    if l == 1:
         for n in range(nmax+1):
-            a_over_r[n, radius] = (a/r[radius])**(n+2)
-    
+            a_over_r[n] = (a/r)**(n+2)
+    else:
+        for radius in range(l):
+            for n in range(nmax+1):
+                a_over_r[n, radius] = (a/r[radius])**(n+2)
+        
     # Calculate Br, Btheta, Bphi, Bt
     if comp == 'Bt':
         Br = np.zeros(l)
@@ -250,7 +312,7 @@ def mag_components(lon, lat, alt, comp):
             for n in range(1, nmax+1):
                 for m in range(n+1):
                     B += (g[n, m] * cos[m] + h[n, m] * sen[m]) * P[n, m] * (n+1) * a_over_r[n]
-        
+                    
         elif comp == 'Btheta':
             sen_theta = np.sin(np.deg2rad(90.0 - lat))
             for n in range(1, nmax+1):
@@ -274,7 +336,7 @@ def model_map(lon, lat, alt, comp, binsize = 0.1):
     
     Parameters:
         lon: array
-            The longitude range, in degrees.
+            The longitude range, in degrees. Ex.: [20., 50.].
             
         lat: array
             The latitude range, in degrees.
@@ -283,7 +345,7 @@ def model_map(lon, lat, alt, comp, binsize = 0.1):
             The altitude in which the map will be computed, in km.
             
         comp: string
-            The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', and 'Bphi'.
+            The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', 'Bphi', and 'Bt'.
             
         binsize: float, list, optional
             The resolution of the grid. If a float, apply the same binsize for longitude and latitude. 
@@ -293,7 +355,7 @@ def model_map(lon, lat, alt, comp, binsize = 0.1):
         A lon X lat array containing the magnetic field component.        
     """
     # Raise an AssertionError if arguments are invalid
-    assert comp == 'Br' or comp == 'Btheta' or comp == 'Bphi', "Check argument for comp"
+    assert comp == 'Br' or comp == 'Btheta' or comp == 'Bphi' or comp == 'Bt', "Check argument for comp"
     assert type(binsize) is float or type(binsize) is list, "Argument for binsize should be a float or a list"
     
     # Import the coefficient files
@@ -310,8 +372,8 @@ def model_map(lon, lat, alt, comp, binsize = 0.1):
     if type(binsize) is float:
         binsize = [binsize, binsize]
     
-    lat_len = round((lat[1] - lat[0]) / binsize[1] + 1.0)
-    lon_len = round((lon[1] - lon[0]) / binsize[0] + 1.0)
+    lat_len = int(round((lat[1] - lat[0]) / binsize[1] + 1.0))
+    lon_len = int(round((lon[1] - lon[0]) / binsize[0] + 1.0))
         
     longitude = np.deg2rad(np.linspace(lon[0], lon[1], lon_len))
     latitude = np.linspace(lat[0], lat[1], lat_len)
@@ -331,37 +393,213 @@ def model_map(lon, lat, alt, comp, binsize = 0.1):
     a_over_r = np.empty((nmax+1)) * np.nan
     for n in range(nmax+1):
         a_over_r[n] = (a/r)**(n+2)
-        
-    B = np.zeros((lon_len, lat_len))
     
-    if comp == 'Br':
-        for n in tqdm(range(1, nmax+1)):
-            for m in range(n+1):
-                tmp1 = g[n, m] * cos[m, :] + h[n, m] * sen[m, :]
-                tmp2 = np.outer(tmp1, P[n, m, :])
-                tmp3 = tmp2 * (n+1) * a_over_r[n]
-                B += tmp3
-    
-    elif comp == 'Btheta':
+    if comp == 'Bt':
+        Br = np.zeros((lon_len, lat_len))
+        Btheta = np.zeros((lon_len, lat_len))
+        Bphi = np.zeros((lon_len, lat_len))
         sen_theta = np.sin(np.deg2rad(90.0 - latitude))
-        for n in tqdm(range(1, nmax+1)):
-            for m in range(n+1):
-                tmp1 = g[n, m] * cos[m, :] + h[n, m] * sen[m, :]
-                tmp2 = np.outer(tmp1, dP[n, m, :] * sen_theta)
-                tmp3 = tmp2 * a_over_r[n]
-                B += tmp3
+        
+        for n in range(1, nmax+1):
+                for m in range(n+1):
+                    tmp1 = g[n, m] * cos[m, :] + h[n, m] * sen[m, :]
+                    tmp2 = np.outer(tmp1, P[n, m, :])
+                    tmp3 = tmp2 * (n+1) * a_over_r[n]
+                    Br += tmp3
+                    
+                    tmp2 = np.outer(tmp1, dP[n, m, :] * sen_theta)
+                    tmp3 = tmp2 * a_over_r[n]
+                    Btheta += tmp3
+                    
+                    tmp1 = g[n, m] * sen[m, :] + h[n, m] * cos[m, :]
+                    tmp2 = np.outer(tmp1, P[n, m, :])
+                    tmp3 = tmp2 * m * a_over_r[n]
+                    Bphi += tmp3
+                    
+        for theta in range(lat_len):
+                Bphi[:, theta] /= sen_theta[theta]
+        
+        B = np.sqrt(Br**2 + Btheta**2 + Bphi**2)
         
     else:
-        sen_theta = np.sin(np.deg2rad(90.0 - latitude))
-        for n in tqdm(range(1, nmax+1)):
-            for m in range(n+1):
-                tmp1 = g[n, m] * sen[m, :] + h[n, m] * cos[m, :]
-                tmp2 = np.outer(tmp1, P[n, m, :])
-                tmp3 = tmp2 * m * a_over_r[n]
-                B += tmp3
+        B = np.zeros((lon_len, lat_len))
         
-        for theta in range(lat_len):
-            B[:, theta] /= sen_theta[theta]
+        if comp == 'Br':
+            for n in tqdm(range(1, nmax+1)):
+                for m in range(n+1):
+                    tmp1 = g[n, m] * cos[m, :] + h[n, m] * sen[m, :]
+                    tmp2 = np.outer(tmp1, P[n, m, :])
+                    tmp3 = tmp2 * (n+1) * a_over_r[n]
+                    B += tmp3
         
+        elif comp == 'Btheta':
+            sen_theta = np.sin(np.deg2rad(90.0 - latitude))
+            for n in tqdm(range(1, nmax+1)):
+                for m in range(n+1):
+                    tmp1 = g[n, m] * cos[m, :] + h[n, m] * sen[m, :]
+                    tmp2 = np.outer(tmp1, dP[n, m, :] * sen_theta)
+                    tmp3 = tmp2 * a_over_r[n]
+                    B += tmp3
+            
+        else:
+            sen_theta = np.sin(np.deg2rad(90.0 - latitude))
+            for n in tqdm(range(1, nmax+1)):
+                for m in range(n+1):
+                    tmp1 = g[n, m] * sen[m, :] + h[n, m] * cos[m, :]
+                    tmp2 = np.outer(tmp1, P[n, m, :])
+                    tmp3 = tmp2 * m * a_over_r[n]
+                    B += tmp3
+            
+            for theta in range(lat_len):
+                B[:, theta] /= sen_theta[theta]
+            
     return B.T
 
+
+class DerivativesList(Enum):
+    Lon = 1
+    Lat = 2
+    Alt = 3
+    
+    LonLon = 4
+    LatLat = 5
+    AltAlt = 6
+    
+    LonLat = 7
+    LonAlt = 8
+    
+    LatLon = 9
+    LatAlt = 10
+    
+    AltLon = 11
+    AltLat = 12
+
+
+def FieldDerivatives(hdegree, hheight, lon, lat, alt, comp, derivatives = None, binsize = 0.1):
+    """
+    Calculates the numerical derivatives of one component of the crustal magnetic field field model, following the equations:
+        $f'(x) = \frac{f(x+h)-f(x)}{h}$
+        $f''(x) = \frac{f(x+h)-2f(x)+f(x-h)}{h^2}$
+    
+    Parameters:
+        hdegree: float
+            A small value (h) for the degree change.
+            
+        hheight: float
+            A small value (h) for the altitude change .
+
+        lon: float, array
+            The longitude range, or explicit values, in degrees.
+            
+        lat: float, array
+            The latitude range, or explicit values, in degrees.
+                        
+        alt: float, array
+            The altitude range, or explicit values, in km.
+            
+        comp: string
+            The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', 'Bphi', and 'Bt'.
+        
+        derivatives: list
+            A list of the desired derivatives, that can be read by DerivativesList. Ex.:[MagFieldDerivative.Lon, MagFieldDerivative.LonLon]. 
+            If None, the output will be every derivative. Default is None.
+            
+        binsize: float, list, optional
+            The resolution of the grid. If a float, apply the same binsize for longitude and latitude. 
+            If a list, the first value represents the longitude binsize and the second, the latitude binsize. 
+        
+    Returns:
+        A list containing the desired derivatives, in the same order of the input.       
+    """
+    if derivatives is None:
+        derivatives = [deriv for deriv in DerivativesList]
+        return FieldDerivatives(hdegree, hheight, lon, lat, alt, comp, derivatives, binsize)
+        
+    else:
+        if hasattr(lon, '__len__') is False or lon.size > 2:
+            model = mag_components(lon, lat, alt, comp)
+            
+            lon1 = mag_components(lon + hdegree, lat, alt, comp)
+            lon2 = mag_components(lon - hdegree, lat, alt, comp)
+            
+            colat1 = mag_components(lon, lat - hdegree, alt, comp)
+            colat2 = mag_components(lon, lat + hdegree, alt, comp)
+            
+            alt1 = mag_components(lon, lat, alt + hheight, comp)
+            alt2 = mag_components(lon, lat, alt - hheight, comp)
+            
+        else:
+            model = model_map(lon, lat, alt, comp, binsize)
+            
+            lon1 = model_map(lon + hdegree, lat, alt, comp, binsize)
+            lon2 = model_map(lon - hdegree, lat, alt, comp, binsize)
+            
+            colat1 = model_map(lon, lat - hdegree, alt, comp, binsize)
+            colat2 = model_map(lon, lat + hdegree, alt, comp, binsize)
+            
+            alt1 = model_map(lon, lat, alt + hheight, comp, binsize)
+            alt2 = model_map(lon, lat, alt - hheight, comp, binsize)
+        
+        out = []
+        for deriv in derivatives:
+            if deriv == DerivativesList.Lon:
+                dlon = (lon1 - model) / hdegree
+                out.append(dlon)
+                
+            if deriv == DerivativesList.Lat:
+                dlat = (colat1 - model) / hdegree
+                out.append(dlat)
+                
+            if deriv == DerivativesList.Alt:
+                dalt = (alt1 - model) / hheight
+                out.append(dalt)
+            
+            if deriv == DerivativesList.LonLon:
+                dlon = (lon1 - model) / hdegree
+                dlon2 = (dlon - (model - lon2) / hdegree) / hdegree
+                out.append(dlon2)
+            
+            if deriv == DerivativesList.LatLat:
+                dlat = (colat1 - model) / hdegree
+                dlat2 = (dlat - (model - colat2) / hdegree) / hdegree
+                out.append(dlat2)
+            
+            if deriv == DerivativesList.AltAlt:
+                dalt = (alt1 - model) / hheight
+                dalt2 = (dalt - (model - alt2) / hheight) / hheight
+                out.append(dalt2)
+            
+            if deriv == DerivativesList.LonLat:
+                dlon = (lon1 - model) / hdegree
+                dlon_dlat = (dlon - (model - colat2) / hdegree) / hdegree
+                out.append(dlon_dlat)
+            
+            if deriv == DerivativesList.LonAlt:
+                dlon = (lon1 - model) / hdegree
+                dlon_dalt = (dlon - (model - alt2) / hdegree) / hdegree
+                out.append(dlon_dalt)
+            
+            if deriv == DerivativesList.LatLon:
+                dlat = (colat1 - model) / hdegree
+                dlat_dlon = (dlat - (model - lon2) / hdegree) / hdegree
+                out.append(dlat_dlon)
+             
+            if deriv == DerivativesList.LatAlt:
+                dlat = (colat1 - model) / hdegree
+                dlat_dalt = (dlat - (model - alt2) / hdegree) / hdegree
+                out.append(dlat_dalt)
+            
+            if deriv == DerivativesList.AltLon:
+                dalt = (alt1 - model) / hheight
+                dalt_dlon = (dalt - (model - lon2) / hheight) / hheight
+                out.append(dalt_dlon)
+            
+            if deriv == DerivativesList.AltLat:
+                dalt = (alt1 - model) / hheight
+                dalt_dlat = (dalt - (model - colat2) / hheight) / hheight
+                out.append(dalt_dlat)
+                
+        return out
+
+    
+    

@@ -22,10 +22,10 @@ def discrete_cmap(N, base_cmap = None):
     """
     base = plt.cm.get_cmap(base_cmap)
     cmap_name = base.name + str(N)
-    
+        
     color_list = base(np.linspace(0, 1, N))
     discrete_map = colors.LinearSegmentedColormap.from_list(cmap_name, color_list, N)
-    
+   
     return discrete_map
 
 
@@ -90,7 +90,8 @@ def resample_by_mean(x, y, z, xplim, yplim, median = False):
 
 
 def resample_1D(x, y, xplim, median = False):
-    """ Resamples a 1D array by nan-mean. Example: an array with 30 datapoints can be reduced to 10 datapoints.
+    """ Resamples a 1D array by nan-mean, considering the coordinates of each point in the array.
+        Example: an array with 30 datapoints can be reduced to 10 datapoints.
 
     Parameters:
         x: list or array
@@ -128,6 +129,33 @@ def resample_1D(x, y, xplim, median = False):
            xp[i] = (xplim[i] + xplim[i+1]) / 2
             
     return xp, yp
+
+
+def down_sample(x, n, median = False):
+    """ Resamples a 1D array by nan-mean. Example: an array with 30 datapoints can be reduced to 10 datapoints.
+
+    Parameters:
+        x: array
+            The array that will be resampled.
+
+        n: integer
+            The number of datapoints by which the array will be resampled.
+ 
+        median: bool, optional
+            If True, resamples by median instead of by mean. Default is False.
+            
+    Returns:
+        xp: array
+            The resampled values.
+    """
+    yp = np.r_[x, np.nan * np.zeros((-len(x) % n,))]
+    
+    if median is False:
+        xp = np.nanmean(yp.reshape(-1, n), axis = -1)
+    else:
+        xp = np.nanmedian(yp.reshape(-1, n), axis = -1)
+        
+    return xp
 
 
 def zoom_in(file, lonlim, latlim, binsize = 0.5):

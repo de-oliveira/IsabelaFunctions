@@ -160,21 +160,25 @@ def exp_fit(x, y, y_error, p0=(1, 1, 1)):
     return popt, pcov, perr
 
 
-def deg2km_mars(alt, deg):
-    """ Converts longitudinal degrees to kilometers, according to the desired altitude, on Mars.
+def deg2km_mars(alt, deg, lat = 0):
+    """ Converts lon/lat distances in degrees to kilometers, according to the desired altitude, on Mars.
 
     Parameters:
-        alt: array
-            The altitudes where the data is measured.
+        alt: float or array
+            The altitudes where the data are measured.
 
-        deg: array
+        deg: float or array
             The measured offsets in degree.
+        
+        lat: float or array
+            The latitudes where the data are measured. This parameter is useful for when converting longitudes, since the longitude distance in km depends on the latitude.
+            Default is zero. Leave it on default if converting latitude degrees to km.
 
     Returns:
         d: array
             The offset distances in kilometers.
     """
     r = 3393.5  # Mars' radius
-    p = 2*np.pi*(r+alt)
+    p = 2*np.pi*(r+alt) * np.cos(lat)
     d = p*deg/360
     return d
