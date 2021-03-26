@@ -3,7 +3,7 @@
 
 def get_version_info():
     """Provide the package version"""
-    VERSION = '0.0.1'
+    VERSION = '0.0.2'
 
     return VERSION
 
