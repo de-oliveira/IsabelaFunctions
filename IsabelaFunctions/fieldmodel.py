@@ -20,7 +20,7 @@ from tqdm import tqdm
 from enum import Enum
 
 
-def legendre_schmidt_Pyshtools(lat):
+def legendre_schmidt_Pyshtools(lat, nmax = 134):
     """
     Uses the pyshtools package to compute the Schmidt semi-normalized associated Legendre functions of the cosine of the colatitude, with nmax = 134 (Langlais model),
     
@@ -33,7 +33,6 @@ def legendre_schmidt_Pyshtools(lat):
         dP: 135 X 135 array containing the first derivatives of the functions.
         
     """
-    nmax = 134
     theta = np.deg2rad(90.0 - lat)
     
     if np.isscalar(lat):
@@ -191,7 +190,7 @@ def legendre_schmidt_ChaosMagPy(theta, nmax):
     return Pnm
     
 
-def mag_components(lon, lat, alt, comp):
+def mag_components(lon, lat, alt, comp, nmax = 134, a = 3393.5):
     """
     Calculates the magnetic field component (Br, Btheta, Bphi, or Bt) of the crustal field model for one set of aerographic coordinates.
     Obs.: Btheta is positive southwards (the origin is in the north pole).
@@ -208,6 +207,12 @@ def mag_components(lon, lat, alt, comp):
             
         comp: string
             The desired magnetic field component, in spherical coordinates. Options are 'Br', 'Btheta', 'Bphi', and 'Bt.
+        
+        nmax: integer, optional
+            The maximum degree and order of the functions.
+        
+        a: float, optional
+            The radius of the planet. Default is the Mars' radius.
             
     Returns:
         A float or an array containing the magnetic field component Br, Btheta, Bphi, or Bt.        
@@ -218,10 +223,6 @@ def mag_components(lon, lat, alt, comp):
     # Import the coefficient files
     from IsabelaFunctions.langlais_coeff import glm as g
     from IsabelaFunctions.langlais_coeff import hlm as h
-    
-    # Mars' radius
-    a = 3393.5
-    nmax = 134
     
     # Calculate r, theta, phi, and the Legendre functions
     r = a + alt
@@ -293,7 +294,7 @@ def mag_components(lon, lat, alt, comp):
     return B
             
 
-def model_map(lon, lat, alt, comp, binsize = 0.1):
+def model_map(lon, lat, alt, comp, binsize = 0.1, nmax = 134, a = 3393.5):
     """
     Calculates a map of one component of the crustal magnetic field field model, for a given altitude.
     
@@ -314,6 +315,12 @@ def model_map(lon, lat, alt, comp, binsize = 0.1):
             The resolution of the grid. If a float, apply the same binsize for longitude and latitude. 
             If a list, the first value represents the longitude binsize and the second, the latitude binsize. 
         
+        nmax: integer, optional
+            The maximum degree and order of the functions.
+        
+        a: float, optional
+            The radius of the planet. Default is the Mars' radius.
+            
     Returns:
         A lon X lat array containing the magnetic field component.        
     """
@@ -324,10 +331,6 @@ def model_map(lon, lat, alt, comp, binsize = 0.1):
     # Import the coefficient files
     from IsabelaFunctions.langlais_coeff import glm as g
     from IsabelaFunctions.langlais_coeff import hlm as h
-    
-    # Mars' radius
-    a = 3393.5
-    nmax = 134
     
     # Calculate r, theta, phi, and the Legendre functions
     r = a + alt
