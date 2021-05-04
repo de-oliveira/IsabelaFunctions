@@ -120,45 +120,7 @@ def legendre_schmidt_Brain(lat, nmax = 134):
         
     return P, dP
 
-
-def legendre_schmidt_derivatives(P, lat, nmax = 134):
-    """
-    Computes the derivatives of the associated Legendre functions. Use this code if you are computing the functions with legendre_schmidt_Brain.
     
-    Parameters:
-        P: nmax+1 X nmax+1 array
-            The array containing the associated Legendre functions.
-            
-        lat: float
-            The latitude, in degrees.
-            
-        nmax: integer
-            The maximum degree and order of the functions.
-            
-    Returns:
-        dP: nmax+1 X nmax+1 array containing the derivatives of the associated Legendre functions.
-        
-    """
-    theta = np.deg2rad(90.0 - lat)
-    x = np.cos(theta)
-    dP = np.zeros((nmax+1, nmax+1))
-    
-    dP[0, 0] = 0.0
-    dP[1, 0] = 1.0
-    dP[nmax, 0] = nmax / (x**2 - 1) * (x * P[nmax, 0] - P[nmax-1, 0])
-    
-    for n in range(2, nmax):
-        dP[n, 0] = (n+1) / (x**2 - 1) * (P[n+1, 0] - x * P[n, 0])
-        
-    for n in range(1, nmax+1):
-        for m in range(1, nmax): # does not work!!
-            #dP[n, m] = -1 / (x**2 - 1) * ((n + m) * (n - m + 1) * np.sqrt(1 - x**2) * P[n, m-1] + m * x * P[n, m])
-            #dP[n, m] = 1 / (x**2 - 1) * ((n + 1) * x * P[n, m] + (n + 1 - m) * P[n+1, m])
-            dP[n, m] = 1 / (2 * np.sqrt(1 - x**2)) * ((n + m) * (n - m + 1) * P[n, m-1] - P[n, m+1])
-    
-    return dP
-    
-
 def legendre_schmidt_ChaosMagPy(theta, nmax):
     """
     Copy of the function developed in the ChaosMagPy package. I did not write this code!
@@ -232,6 +194,7 @@ def legendre_schmidt_ChaosMagPy(theta, nmax):
 def mag_components(lon, lat, alt, comp):
     """
     Calculates the magnetic field component (Br, Btheta, Bphi, or Bt) of the crustal field model for one set of aerographic coordinates.
+    Obs.: Btheta is positive southwards (the origin is in the north pole).
     
     Parameters:
         lon: float or array

@@ -169,7 +169,7 @@ def plot_altitude_range(alt_range, alt, lon, lat, br, anomaly, lim, brange = Non
     if vaz is not None and vpol is not None:
         vaz[vaz == 0.0] = np.nan
         vpol[vpol == 0.0] = np.nan
-        plt.quiver(lon[h], lat[h], vaz[h], vpol[h], scale = 50.0)
+        plt.quiver(lon[h], lat[h], vaz[h], -vpol[h], scale = 50.0)
         title = title + '_VelArrows'
     
     plt.xlim(lim[0], lim[1])
@@ -281,7 +281,7 @@ def plot_time_range(start, delta, date, alt, lon, lat, br, lt, sza, vaz = None, 
     if vaz is not None and vpol is not None:
         vaz[vaz == 0.0] = np.nan
         vpol[vpol == 0.0] = np.nan
-        plt.quiver(lon[date_range], lat[date_range], vaz[date_range], vpol[date_range], scale = 50.0)
+        plt.quiver(lon[date_range], lat[date_range], vaz[date_range], -vpol[date_range], scale = 50.0)
     
     plt.xlim(lim[0], lim[1])
     plt.ylim(lim[2], lim[3])
@@ -419,7 +419,7 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
         vaz = np.full_like(br, np.nan)
         vpol = np.full_like(br, np.nan)
     
-    avg = np.sqrt(abs(np.nanmedian(vaz))**2 + abs(np.nanmedian(vpol))**2)
+    avg = np.sqrt(abs(np.nanmedian(vaz))**2 + abs(np.nanmedian(-vpol))**2)
     
     if shifteast != 0.0 or shiftnorth != 0.0 or rotate != 0.0:
         rot_lon, rot_lat = rot2D(lon+shifteast, lat+shiftnorth, rotate, p)
@@ -464,7 +464,7 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                              edgecolors = 'black', s = 50, marker = 'D')
             plt.legend([p1, p2], ['Data', 'Fit'], fancybox = True, loc = 'lower left', edgecolor = 'inherit', framealpha = 1.0, fontsize = f,\
                        handletextpad = 0.4)
-        plt.quiver(lim[1]-6., lim[2]+2.0, np.nanmedian(vaz), np.nanmedian(vpol), pivot = 'middle', edgecolor = 'black', lw = 1.0)
+        plt.quiver(lim[1]-6., lim[2]+2.0, np.nanmedian(vaz), np.nanmedian(-vpol), pivot = 'middle', edgecolor = 'black', lw = 1.0)
         plt.text(lim[1]-0.3, lim[2]+0.6, '$\mathbf{\overline{V}_h}$ direction\nFit direction', fontsize = f, linespacing = 2, ha = 'right')
             
         hours = str(int((np.min(lt)+np.max(lt))/2))[0:2]
@@ -538,7 +538,7 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                           ' LT \tSZA = ' + str(int(round(sza[i]))) + '$\degree$', fontsize = f)
                 
                 if vaz is not None and vpol is not None:
-                    plt.quiver(lon[i], lat[i], vaz[i], vpol[i], edgecolor = 'black', lw = 1.0)
+                    plt.quiver(lon[i], lat[i], vaz[i], -vpol[i], edgecolor = 'black', lw = 1.0)
                 
                 if title is not None:
                     plt.text(lim[0] + 0.5, lim[3] - 1.0, title, weight = 'bold', fontsize = f, va = 'center')
@@ -582,7 +582,7 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                           ' LT \tSZA = ' + str(int(round(sza[i]))) + '$\degree$\nh = ' + str(int(round(alt[i]))) + ' km', fontsize = f)
                 
                 if vaz is not None and vpol is not None:
-                    plt.quiver(lon[i], lat[i], vaz[i], vpol[i], edgecolor = 'black', lw = 1.0)
+                    plt.quiver(lon[i], lat[i], vaz[i], -vpol[i], edgecolor = 'black', lw = 1.0)
                 
                 p2 = plt.scatter(rot_lon[i], rot_lat[i], c = br[i], cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax), \
                             edgecolors = 'black', marker = 'D')
