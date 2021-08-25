@@ -101,13 +101,14 @@ def orbit_residual(lon, lat, alt, br, lim, fn):
     else: # If fn is a function
         for i in range(len(alt)):
         
-        # If data is within the limits
+            # If data is outside the limits
             if lon[i] >= lim[0] and lon[i] <= lim[1]:
                 if lat[i] >= lim[2] and lat[i] <= lim[3]:
+                
                     model = fn([lon[i], lat[i], alt[i]])    
                     res[i] = np.double(abs(br[i] - model))       
     
-    count = np.count_nonzero(~np.isnan(res))
+    count = np.count_nonzero(~np.isnan(res))    # ~ inverts the boolean matrix returned from np.isnan
     res_total = np.nansum(res)/count
     
     return res, res_total

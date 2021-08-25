@@ -1,11 +1,14 @@
 """
-Reads IDL-generated files, e.g., files created in CCATi.
+Reads IDL-generated files, e.g., files created in CCATi. Reads .csv files and merge them.
 """
 
 import scipy as sp
 import scipy.io
 import numpy as np
 from scipy.interpolate import RegularGridInterpolator as rgi
+import glob
+import os
+import pandas as pd
 
 
 def ccati_file(path, file, variable, ndata = True, mean = False):
@@ -80,4 +83,38 @@ def crustal_model_files(alt = [200, 1000], anomaly = 'Global', lim = [0., 360. -
     fn = rgi((longitude, latitude, altitude), br)
        
     return fn, br
+    
+def csv_merge(path, out):
+    """
+    Merges all of the .csv files in a folder. Maybe that is not a good idea.
+
+    Parameters
+    ----------
+    path : string
+        The path to the folder.
+    out : string
+        The name of the resulting merged file.
+
+    Returns
+    -------
+    None.
+
+    """
+    # get all the csv files in that directory (assuming they have the extension .csv)
+    csvfiles = glob.glob(os.path.join(path, '*.csv'))
+    
+    # loop through the files and read them in with pandas
+    dataframes = []
+    for csvfile in csvfiles:
+        df = pd.read_csv(csvfile)
+        dataframes.append(df)
+    
+    # concatenate them all together
+    result = pd.concat(dataframes, ignore_index=True)
+    
+    # print out to a new csv file
+    result.to_csv(out)
+    return
+
+        
     

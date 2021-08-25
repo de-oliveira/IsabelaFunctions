@@ -61,7 +61,7 @@ def plot_altitude_model(new_alt, alt, lon, lat, br, anomaly, brange = None, lim 
     my_cmap.set_under('b', 1.0)
     
     if brange is None:
-        bmax = np.max(br)
+        bmax = np.nanmax(br)
     else:
         bmax = brange
     bmin = -bmax
@@ -148,7 +148,7 @@ def plot_altitude_range(alt_range, alt, lon, lat, br, anomaly, lim, brange = Non
     my_cmap.set_under('b', 1.0)
     
     if brange is None:
-        bmax = np.max(br)
+        bmax = np.nanmax(br)
     else:
         bmax = brange
     bmin = -bmax
@@ -262,7 +262,7 @@ def plot_time_range(start, delta, date, alt, lon, lat, br, lt, sza, vaz = None, 
     my_cmap2 = copy(plt.cm.viridis_r)
     
     if brange is None:
-        bmax = np.max(br)
+        bmax = np.nanmax(br)
     else:
         bmax = brange
     bmin = -bmax
@@ -406,8 +406,8 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
         time2 = time2.isoformat()
     
     if brange is None:
-        bmax = np.max(br)
-        bmin = np.min(br)
+        bmax = np.nanmax(br)
+        bmin = np.nanmin(br)
     else:
         bmax = brange
         bmin = -bmax
@@ -445,11 +445,11 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
         plt.xticks(fontsize = f)
         
         if h == None:
-            h = int((np.max(alt) + np.min(alt)) // 2)
+            h = int((np.nanmax(alt) + np.nanmin(alt)) // 2)
         brmodel = isa.fieldmodel.model_map([lim[0], lim[1]], [lim[2], lim[3]], h, 'Br')
         if brange is None:
-            bmax = np.max(brmodel)
-            bmin = np.min(brmodel)
+            bmax = np.nanmax(brmodel)
+            bmin = np.nanmin(brmodel)
         else:
             bmax = brange
             bmin = -bmax
@@ -457,24 +457,35 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
         p1 = plt.scatter(lon, lat, c = br, cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax), edgecolors = 'black', s = 50)
         im = plt.imshow(brmodel, extent = lim, origin = 'lower', cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax))
         
-        if shifteast != 0.0 or shiftnorth != 0.0 or rotate != 0.0: 
-            plt.quiver(lim[1]-6., lim[2]+1.0, -shifteast, -shiftnorth, color = 'white', edgecolor = 'black', pivot = 'middle', \
+        if shifteast != 0.0 or shiftnorth != 0.0 or rotate != 0.0:
+            east = []
+            north = []
+            for i in range(len(lon)):
+                east.append(lon[i] - rot_lon[i])
+                north.append(lat[i] - rot_lat[i])
+                    
+            plt.quiver(lim[1]-6., lim[2]+1.0, np.nanmedian(east), np.nanmedian(north), color = 'white', edgecolor = 'black', pivot = 'middle', \
                        lw = 1.0)        
             p2 = plt.scatter(rot_lon, rot_lat, c = br, cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax),\
-                             edgecolors = 'black', s = 50, marker = 'D')
-            plt.legend([p1, p2], ['Data', 'Fit'], fancybox = True, loc = 'lower left', edgecolor = 'inherit', framealpha = 1.0, fontsize = f,\
-                       handletextpad = 0.4)
+                             edgecolors = 'black', s = 50, marker = '^')
+            #plt.legend([p1, p2], ['Data', 'Fit'], fancybox = True, loc = 'lower left', edgecolor = 'inherit', framealpha = 1.0, fontsize = f,\
+            #           handletextpad = 0.4)
+            plt.annotate('original', (77.5, 42), xytext = (79, 43), fontsize = f, arrowprops = dict(arrowstyle = 'simple', color = 'black', lw = 0.1))    
+                
         plt.quiver(lim[1]-6., lim[2]+2.0, np.nanmedian(vaz), np.nanmedian(-vpol), pivot = 'middle', edgecolor = 'black', lw = 1.0)
         plt.text(lim[1]-0.3, lim[2]+0.6, '$\mathbf{\overline{V}_h}$ direction\nFit direction', fontsize = f, linespacing = 2, ha = 'right')
-            
-        hours = str(int((np.min(lt)+np.max(lt))/2))[0:2]
+        plt.annotate('shifted', (71, 39), xytext = (72.5, 40), fontsize = f, arrowprops = dict(arrowstyle = 'simple', color = 'black', lw = 0.1))
+        
+        plt.text(lim[1]-0.3, lim[3]-1.0, 'Dusk', fontsize = f, ha = 'right')
+        
+        hours = str(int((np.nanmin(lt)+np.nanmax(lt))/2))[0:2]
         if len(hours) == 1:
             hours = '0' + hours
-        minutes = str(int((((np.min(lt) + np.max(lt)) % 2) / 2 * 60)))
+        minutes = str(int((((np.nanmin(lt) + np.nanmax(lt)) % 2) / 2 * 60)))
         
-        plt.title(time1 + ' $-$ ' + time2[-8:] + '\n~' + hours + ':' + minutes + ' LT\tSZA = ' \
-                  + str(int(np.min(sza))) + '$\degree - $' + str(int(np.max(sza))) + \
-                  '$\degree$\th = ' + str(int(np.min(alt))) + ' - ' + str(int(np.max(alt))) + ' km', fontsize = f)
+        plt.title(time1[:10] + ' \t ' + time1[-8:] + ' $-$ ' + time2[-8:] + '\n~' + hours + ':' + minutes + ' LT \t SZA = ' \
+                  + str(int(np.nanmin(sza))) + '$\degree - $' + str(int(np.nanmax(sza))) + \
+                  '$\degree$ \t h = ' + str(int(np.nanmin(alt))) + '$-$' + str(int(np.nanmax(alt))) + ' km', fontsize = f)
         
         if title is not None:
             plt.text(lim[0] + 0.5, lim[3] - 1.0, title, weight = 'bold', fontsize = f, va = 'center')
@@ -485,13 +496,13 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
         cbar.set_label('$B_r$ (nT)', fontsize = f)
         cbar.ax.tick_params(labelsize = f)
         
-        plt.savefig('/home/oliveira/PythonScripts/Orbits/Single Orbits 2/'+ anomaly +'/Orbit_' + anomaly + '_' + n_title + '.pdf', bbox_inches = 'tight')
+        plt.savefig('/home/oliveira/PythonScripts/Orbits/Single Orbits/'+ anomaly +'/Orbit_' + anomaly + '_' + n_title + '.pdf', bbox_inches = 'tight')#, dpi = 600)
     
         print(' res orig = ' + str(res_total2) + ' nT\n res shift = ' + str(res_total) + ' nT\n Vh mean = ' + str(avg) + ' km/s')
         
     else:
         #assert type(model) is np.ndarray, "Please enter a matrix containing the model data."
-        new_dir = '/home/oliveira/PythonScripts/Orbits/Single Orbits 2/' + anomaly + '/' + n_title
+        new_dir = '/home/oliveira/PythonScripts/Orbits/Single Orbits/' + anomaly + '/' + n_title
         if os.path.isdir(new_dir) == False:
             os.makedirs(new_dir)
         length = len(br)
@@ -509,8 +520,9 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                 plt.xlabel('Longitude ($\degree$)', fontsize = f)
                 plt.xticks(fontsize = f)
                 
-                data = sp.io.readsav('/home/oliveira/ccati_mexuser/LANGLAIS_Matrices/' + anomaly + '/LANGLAIS_BR_ALT_' + str(int(alt[i])) + '_RES_01.bin')
-                brmodel = data['zbins']
+                # data = sp.io.readsav('/home/oliveira/ccati_mexuser/LANGLAIS_Matrices/' + anomaly + '/LANGLAIS_BR_ALT_' + str(int(alt[i])) + '_RES_01.bin')
+                # brmodel = data['zbins']
+                brmodel = isa.fieldmodel.model_map([lim[0], lim[1]], [lim[2], lim[3]], alt[i], 'Br')
                 
                 window = np.around(abs(br[i]))*sigma
                 br_single = np.logical_and(np.around(brmodel) >= (np.around(br[i]) - window), \
@@ -521,10 +533,19 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                 p1 = plt.scatter(lon[i], lat[i], c = br[i], cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax), edgecolors = 'black')
                 im = plt.imshow(a, extent = lim, origin = 'lower', cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax))
                 p2 = plt.scatter(rot_lon[i], rot_lat[i], c = br[i], cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax),\
-                             edgecolors = 'black', marker = 'D')
+                             edgecolors = 'black', marker = '^')
+                     
+                if shifteast != 0.0 or shiftnorth != 0.0 or rotate != 0.0:
+                    east = []
+                    north = []
+                    for i in range(len(lon)):
+                        east.append(lon[i] - rot_lon[i])
+                        north.append(lat[i] - rot_lat[i])
+                            
+                    plt.quiver(lim[1]-6., lim[2]+1.0, np.nanmedian(east), np.nanmedian(north), color = 'white', edgecolor = 'black', pivot = 'middle', \
+                               lw = 1.0)
                     
-                if shifteast != 0.0 or shiftnorth != 0.0: 
-                    plt.legend([p1, p2], ['Data', 'Fit'], fancybox = True, loc = 'lower left', edgecolor = 'inherit', framealpha = 1.0, fontsize = f,\
+                    plt.legend([p1, p2], ['Original', 'Shifted'], fancybox = True, loc = 'lower left', edgecolor = 'inherit', framealpha = 1.0, fontsize = f,\
                        handletextpad = 0.4)
                     plt.quiver(lim[1]-5.5, lim[2]+1.0, -shifteast, -shiftnorth, color = 'white', edgecolor = 'black', pivot = 'middle', \
                        lw = 1.0)    
@@ -534,8 +555,8 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                 if hours[1] == '.':
                      hours = '0' + hours[0]
                 minutes = str(lt[i] % 1 * 60)[0:2]
-                plt.title(time1 + ' $-$ ' + time2[-8:] + '\n' + hours + ':' + minutes + \
-                          ' LT \tSZA = ' + str(int(round(sza[i]))) + '$\degree$', fontsize = f)
+                plt.title(time1[:10] + ' \t ' + time1[-8:] + ' $-$ ' + time2[-8:] + '\n' + hours + ':' + minutes + \
+                          ' LT \t SZA = ' + str(int(round(sza[i]))) + '$\degree$', fontsize = f)
                 
                 if vaz is not None and vpol is not None:
                     plt.quiver(lon[i], lat[i], vaz[i], -vpol[i], edgecolor = 'black', lw = 1.0)
@@ -550,9 +571,9 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                 cbar.ax.tick_params(labelsize = f)
             
                 if i < 10:
-                    plt.savefig(new_dir + '/contour_0' + str(i) + '.png', bbox_inches = 'tight', dpi = 500)
+                    plt.savefig(new_dir + '/contour_0' + str(i) + '.png', bbox_inches = 'tight', dpi = 600)
                 else:
-                    plt.savefig(new_dir + '/contour_' + str(i) + '.png', bbox_inches = 'tight', dpi = 500)
+                    plt.savefig(new_dir + '/contour_' + str(i) + '.png', bbox_inches = 'tight', dpi = 600)
                 plt.clf()
     
         else:
@@ -568,8 +589,9 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                 plt.xlabel('Longitude ($\degree$)', fontsize = f)
                 plt.xticks(fontsize = f)
                 
-                data = sp.io.readsav('/home/oliveira/ccati_mexuser/LANGLAIS_Matrices/'+anomaly+'/LANGLAIS_BR_ALT_' + str(int(round(alt[i]))) + '_RES_01.bin')
-                brmodel = data['zbins']
+                # data = sp.io.readsav('/home/oliveira/ccati_mexuser/LANGLAIS_Matrices/'+anomaly+'/LANGLAIS_BR_ALT_' + str(int(round(alt[i]))) + '_RES_01.bin')
+                # brmodel = data['zbins']
+                brmodel = isa.fieldmodel.model_map([lim[0], lim[1]], [lim[2], lim[3]], alt[i], 'Br')
                         
                 p1 = plt.scatter(lon[i], lat[i], c = br[i], cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax), edgecolors = 'black')
                 im = plt.imshow(brmodel, extent = lim, origin = 'lower', cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax))
@@ -578,21 +600,30 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                 if hours[1] == '.':
                      hours = '0' + hours[0]
                 minutes = str(lt[i] % 1 * 60)[0:2]
-                plt.title(time1 + ' $-$ ' + time2[-8:] + '\n' + hours + ':' + minutes + \
-                          ' LT \tSZA = ' + str(int(round(sza[i]))) + '$\degree$\nh = ' + str(int(round(alt[i]))) + ' km', fontsize = f)
+                plt.title(time1[:10] + ' \t ' + time1[-8:] + ' $-$ ' + time2[-8:] + '\n' + hours + ':' + minutes + \
+                          ' LT \t SZA = ' + str(int(round(sza[i]))) + '$\degree$\nh = ' + str(int(round(alt[i]))) + ' km', fontsize = f)
                 
                 if vaz is not None and vpol is not None:
                     plt.quiver(lon[i], lat[i], vaz[i], -vpol[i], edgecolor = 'black', lw = 1.0)
                 
                 p2 = plt.scatter(rot_lon[i], rot_lat[i], c = br[i], cmap = my_cmap, norm = colors.Normalize(vmin = bmin, vmax = bmax), \
-                            edgecolors = 'black', marker = 'D')
+                            edgecolors = 'black', marker = '^')
                     
                 if shifteast != 0.0 or shiftnorth != 0.0:
+                    east = []
+                    north = []
+                    for i in range(len(lon)):
+                        east.append(lon[i] - rot_lon[i])
+                        north.append(lat[i] - rot_lat[i])
+                            
+                    plt.quiver(lim[1]-6., lim[2]+1.0, np.nanmedian(east), np.nanmedian(north), color = 'white', edgecolor = 'black', pivot = 'middle', \
+                               lw = 1.0)
+                        
                     plt.legend([p1, p2], ['Data', 'Fit'], fancybox = True, loc = 'lower left', edgecolor = 'inherit', framealpha = 1.0, fontsize = f,\
                        handletextpad = 0.4)
-                    plt.quiver(lim[1]-5.5, lim[2]+1.0, -shifteast, -shiftnorth, color = 'white', edgecolor = 'black', pivot = 'middle', \
-                       lw = 1.0)    
                     plt.text(lim[1]-0.3, lim[2]+1., 'Fit direction', fontsize = f, linespacing = 2, ha = 'right', va = 'center')
+                
+                plt.text(lim[1]-0.3, lim[3]-1.0, 'Dawn', fontsize = f, ha = 'right')
                 
                 if title is not None:
                     plt.text(lim[0] + 0.5, lim[3] - 1.0, title, weight = 'bold', fontsize = f, va = 'center')
@@ -604,16 +635,16 @@ def plot_many_data(alt, lon, lat, br, lt, sza, n_title, anomaly, lim, model, vaz
                 cbar.ax.tick_params(labelsize = f)
             
                 if i < 10:
-                    plt.savefig(new_dir + '/full_0' + str(i) + '.png', bbox_inches = 'tight', dpi = 500)
+                    plt.savefig(new_dir + '/full_0' + str(i) + '.png', bbox_inches = 'tight', dpi = 600)
                 else:
-                    plt.savefig(new_dir + '/full_' + str(i) + '.png', bbox_inches = 'tight', dpi = 500)
+                    plt.savefig(new_dir + '/full_' + str(i) + '.png', bbox_inches = 'tight', dpi = 600)
                 plt.clf()
     
     return res_total2, res_total, res2, res, rot_lon, rot_lat
 
 
-def plot_many_altitude(alt1, lon1, lat1, lim, hrange = None, alt2 = None, lon2 = None, lat2 = None, title = None, h = None):
-    """ Plots many altitudes.
+def plot_many_altitude(alt1, lon1, lat1, lim, hrange = None, alt2 = None, lon2 = None, lat2 = None, legend = None, h = None, title = None):
+    """ Plots altitudes for two different orbits, for comparison.
 
    Parameters:
         alt1: 1D array
@@ -640,18 +671,21 @@ def plot_many_altitude(alt1, lon1, lat1, lim, hrange = None, alt2 = None, lon2 =
         lat2: 1D array, optional
             An array containing the latitude data (second dataset).
             
-        title: string or 2-elements array of strings, optional
-            The title that will appear next to the measurements of altitude.
+        legend: string or 2-elements array of strings, optional
+            The legend labels.
             
         h: float, optional
             If you want to plot the contour lines of the radial magnetic field in the background, set this parameter to a float equal to the desired height of the magnetic field model. Default is not plot anything. 
+        
+        title: string, optional
+            A string that will appear on the .pdf file name.
     Returns:
     """
     f = 14
     my_cmap = copy(plt.cm.viridis_r)
     
     if hrange is None:
-        hrange = [np.min(alt1), np.max(alt1)]
+        hrange = [np.nanmin(alt1), np.nanmax(alt1)]
 
     fig, axes = plt.subplots(1, 1, figsize = [8, 8])
     plt.subplots_adjust(hspace = 0, wspace = 0)
@@ -681,10 +715,10 @@ def plot_many_altitude(alt1, lon1, lat1, lim, hrange = None, alt2 = None, lon2 =
     
     if alt2 is not None:
         p2 = plt.scatter(lon2, lat2, c = alt2, cmap = my_cmap, norm = colors.Normalize(vmin = hrange[0], vmax = hrange[1]), \
-            edgecolors = 'black', marker = 'D', alpha = 1, s = 50)
+            edgecolors = 'black', marker = '^', alpha = 1, s = 50)
         
-        if title is not None:
-            plt.legend([p1, p2], [title[0], title[1]], fancybox = True, loc = 'lower left', edgecolor = 'inherit', \
+        if legend is not None:
+            plt.legend([p1, p2], [legend[0], legend[1]], fancybox = True, loc = 'lower left', edgecolor = 'inherit', \
                        framealpha = 1.0, fontsize = f, handletextpad = 0.4)
     
     plt.subplots_adjust(right = 0.8)
@@ -693,7 +727,10 @@ def plot_many_altitude(alt1, lon1, lat1, lim, hrange = None, alt2 = None, lon2 =
     cbar.set_label('Altitude (km)', fontsize = f)
     cbar.ax.tick_params(labelsize = f)
     
-    plt.savefig('altitudes.pdf', bbox_inches = 'tight')
+    if title is None:
+        plt.savefig('altitudes.pdf', bbox_inches = 'tight')
+    else:
+        plt.savefig('altitudes_' + title + '.pdf', bbox_inches = 'tight')
     return
 
 
@@ -941,7 +978,7 @@ def minres_finer(alt, lon, lat, br, fn, lim, Erange, Nrange, Rrange, p = None):
     return lon00, lat00, rot00
 
 
-def index_orbit(date, alt = None, lon = None, lat = None, br = None, lt = None, sza = None, vaz = None, vpol = None, short_lists = True, time = 7200):
+def index_orbit(date, alt = None, lon = None, lat = None, br = None, lt = None, sza = None, vaz = None, vpol = None, vh = None, short_lists = True, time = 7200):
     """ Separates the data set in sets of orbits.
     
     Parameters:
@@ -971,6 +1008,9 @@ def index_orbit(date, alt = None, lon = None, lat = None, br = None, lt = None, 
             
         vpol: 1D array, optional
             An array containing the polar velocity data.
+            
+        vh: 1D array, optional
+            An array containing the horizontal velocity data.
         
         short_lists: bool, optional
             If true, remove the orbits with less than 10 data points. Default is True.
@@ -990,6 +1030,7 @@ def index_orbit(date, alt = None, lon = None, lat = None, br = None, lt = None, 
     list_lt = []
     list_vaz = []
     list_vpol = []
+    list_vh = []
     
     j = 0
     for i in range(len(date)-1):
@@ -1005,6 +1046,7 @@ def index_orbit(date, alt = None, lon = None, lat = None, br = None, lt = None, 
             list_lt.append(lt[j:i+1])
             list_vaz.append(vaz[j:i+1])
             list_vpol.append(vpol[j:i+1])
+            list_vh.append(vh[j:i+1])
             list_br.append(br[j:i+1])
             
             j = i+1
@@ -1018,6 +1060,7 @@ def index_orbit(date, alt = None, lon = None, lat = None, br = None, lt = None, 
     list_lt.append(lt[j:-1])
     list_vaz.append(vaz[j:-1])
     list_vpol.append(vpol[j:-1])
+    list_vh.append(vh[j:-1])
     list_br.append(br[j:-1])
     
     # If there are less than 10 elements in the orbit, remove it
@@ -1032,7 +1075,8 @@ def index_orbit(date, alt = None, lon = None, lat = None, br = None, lt = None, 
                 list_lt.pop(i)
                 list_vaz.pop(i)
                 list_vpol.pop(i)
+                list_vh.pop(i)
                 list_br.pop(i)
             
-    return list_date, list_alt, list_lon, list_lat, list_br, list_lt, list_sza, list_vaz, list_vpol
+    return list_date, list_alt, list_lon, list_lat, list_br, list_lt, list_sza, list_vaz, list_vpol, list_vh
 
