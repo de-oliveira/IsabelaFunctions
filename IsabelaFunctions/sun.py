@@ -178,7 +178,7 @@ def irradiance_from_Br(B, ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_f
 
 
 def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, \
-                    interp_um, interp_penum, x_obs = 0., y_obs = 0.):
+                    interp_um, interp_penum, flux_quiet, x_obs = 0., y_obs = 0.):
     """
     Calculation of irradiance from a full surface map (e.g. from simulaiton), from filling factors (no Br).
 
@@ -223,7 +223,20 @@ def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp
     mask_pen = np.empty_like(ff_faculae)
     vis = np.empty_like(ff_faculae)
     
+   
+    delta_fac = np.zeros(nday)
+    delta_umb = np.zeros(nday)
+    delta_pen = np.zeros(nday)
+    
+    omega_sun = 6.7996873e-5
+    
+    omega = [6.6296969e-06, 1.2239433e-05, 1.0879501e-05 , 9.5195652e-06  , 8.1596210e-06,\
+         6.7996889e-06   ,5.4397487e-06 ,  4.0798125e-06 ,  2.7198764e-06  , 1.1474451e-06, 3.8248306e-07]
+   
+    irr_qs = np.nansum(flux_quiet * omega)
+
     for i in tqdm(range(nday)):
+    #for i in range(5, 10):
      
         x_rot = (np.linspace(0, 359, 360) + 13.38 * days[i]) % 360  # introduces rotation of heliographic longitude by 13.28 degrees per day
         x_lon = -180. + x_rot # longitudes array corrected for rotation
@@ -243,31 +256,43 @@ def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp
         mask_umb[i] = mask_qs[i] * ff_umbra[i]
         mask_pen[i] = mask_qs[i] * ff_penumbra[i]
         
-        # Calculation of irradiance                
-        irr_qs = np.nansum(mask_qs[i] * interp_qs(vis[i]))
-        irr_fac = np.nansum(mask_fac[i] * (interp_fac(vis[i]) - interp_qs(vis[i])))
-        irr_umb = np.nansum(mask_umb[i] * (interp_um(vis[i]) - interp_qs(vis[i])))
-        irr_pen = np.nansum(mask_pen[i] * (interp_penum(vis[i]) - interp_qs(vis[i])))
+        # Calculation of irradiance
         
-        irradiance[i] = irr_qs + irr_fac + irr_umb + irr_pen
+        delta_fac[i] = np.nansum(mask_fac[i] * (interp_fac(vis[i]) - irr_qs)) * omega_sun
+        delta_umb[i] = np.nansum(mask_umb[i] * (interp_um(vis[i]) - irr_qs)) * omega_sun
+        delta_pen[i] = np.nansum(mask_pen[i] * (interp_penum(vis[i]) - irr_qs)) * omega_sun
+        
+        # irr_qs[i] = np.nansum(mask_qs[i] * interp_qs(vis[i]))
+        # irr_fac[i] = np.nansum(mask_fac[i] * (interp_fac(vis[i]) - interp_qs(vis[i])))
+        # irr_umb[i] = np.nansum(mask_umb[i] * (interp_um(vis[i]) - interp_qs(vis[i])))
+        # irr_pen[i] = np.nansum(mask_pen[i] * (interp_penum(vis[i]) - interp_qs(vis[i])))
+        
+        irradiance[i] = irr_qs + delta_fac[i] + delta_umb[i] + delta_pen[i]
 
     irradiance[irradiance == 0.] = np.nan
     
     return irradiance
  
-    
-# i = 100 
 
-# plt.contour(vis[i])
+def irr_qs(flux_quiet, angles): 
+    omega = [6.6296969e-06, 1.2239433e-05, 1.0879501e-05 , 9.5195652e-06  , 8.1596210e-06,\
+         6.7996889e-06   ,5.4397487e-06 ,  4.0798125e-06 ,  2.7198764e-06  , 1.1474451e-06, 3.8248306e-07]
+   
+    qs = np.nansum(flux_quiet * omega)
+    return qs
+    
+# i = 20
+# plt.contourf(vis[i])
 
 # plt.contourf(ff_faculae[i])
 # plt.contourf(ff_umbra[i])
 
 # plt.contour(mask_qs[i])
-# plt.contour(mask_fac[i]) 
-# plt.contour(mask_umb[i])
 
-# np.save('fac', ff_faculae[i])
+# i=9
+# plt.contourf(mask_fac[i]); plt.colorbar()
+# plt.contour(mask_umb[i]); plt.colorbar()
+
 
 def moving_average(a, nday, norm = True):
     """ Calculates the linear moving average for a data set.
