@@ -210,18 +210,21 @@ def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp
     """
     nday, nlat, nlon = ff_faculae.shape
     days = np.linspace(1, nday, nday)
-     
-    x = np.linspace(1., 360., 360)
-    y = np.linspace(-90., 90., 181)
-    x_not_used, y_pos = np.meshgrid(x, y)    
+
+    x = np.linspace(1., 360., nlat)
+    y = np.linspace(-90., 90., nlon)
+    x_pos, y_pos = np.meshgrid(x, y)    
+    
+    delta_lambda = abs(x_pos - x_obs)
+    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
+    vis[vis < 0.] = 0.
+    mask_qs = vis * np.cos(np.deg2rad(y_pos))
     
     irradiance = np.zeros(nday)
-    
-    mask_qs = np.empty_like(ff_faculae)
-    mask_fac = np.empty_like(ff_faculae)
-    mask_umb = np.empty_like(ff_faculae)
-    mask_pen = np.empty_like(ff_faculae)
-    vis = np.empty_like(ff_faculae)
+
+    mask_fac = np.empty((nday, nlat, nlon))
+    # mask_umb = np.empty_like(ff_faculae)
+    # mask_pen = np.empty_like(ff_faculae)
     
    
     delta_fac = np.zeros(nday)
@@ -237,24 +240,19 @@ def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp
 
     for i in tqdm(range(nday)):
     #for i in range(5, 10):
-     
-        x_rot = (np.linspace(0, 359, 360) + 13.38 * days[i]) % 360  # introduces rotation of heliographic longitude by 13.28 degrees per day
-        x_lon = -180. + x_rot # longitudes array corrected for rotation
-        x_pos, y_not_used = np.meshgrid(x_lon, y)
-        
-        delta_lambda = abs(x_pos - x_obs)
-        vis[i] = isa.sun.visible(y_obs, y_pos, delta_lambda)
-        
+        lonshift = 13.38 * days[i]
+        # x_rot = (np.linspace(0, 359, 360) + 13.38 * days[i]) % 360  # introduces rotation of heliographic longitude by 13.28 degrees per day
+        #x_lon = -180. + x_rot # longitudes array corrected for rotation
+        #x_pos, y_not_used = np.meshgrid(x_lon, y)
         # an observer will see only half of the sphere
-        vis[vis < 0.] = 0.
-        
         # solid angle of each pixel in the visible disk, accounts for the reduction in the pixel area with latitude
-        mask_qs[i] = vis[i] * np.cos(np.deg2rad(y_pos))
-        
+
         # filling factors multiplied with solid angle of the pixel
-        mask_fac[i] = mask_qs[i] * ff_faculae[i]
-        mask_umb[i] = mask_qs[i] * ff_umbra[i]
-        mask_pen[i] = mask_qs[i] * ff_penumbra[i]
+        mask_fac[i] = mask_qs * isa.mapsetup.shift_map_longitude(ff_faculae, lonshift)
+        
+        
+        mask_umb[i] = mask_qs * ff_umbra[i]
+        mask_pen[i] = mask_qs * ff_penumbra[i]
         
         # Calculation of irradiance
         
