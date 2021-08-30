@@ -200,3 +200,43 @@ def crop(file, x, y):
     cropped = file[y[0]:y[1]+1, x[0]:x[1]+1]
     
     return cropped
+
+
+def shift_map_longitude(mapdata, lonshift, spline_order=1):
+    """ Simple shift of the map by wrapping it around the edges
+    
+    Internally uses scipy's ndimage.shift with spline interpolation order as
+    requested for interpolation
+
+    Parameters
+    ----------
+    mapdata : 2D Numpy array
+        A map with the second dimension the longutide stretched fully along the
+        map
+        
+    lonshift : float
+        A simple float representing the longitude shift of the array
+        
+    spline_order: int [1, 5]
+
+    Returns
+    -------
+    A shifted map
+
+    """
+    from scipy.ndimage import shift
+    
+    # Constant
+    degrees = 360.0
+    
+    # Check the map and compute the relative shift
+    assert len(mapdata.shape) == 2, "Only for 2D maps"
+    assert mapdata.shape[1] > 1, "Map has only one longitudinal coordinate"
+    
+    n = (mapdata.shape[1] - 1) 
+    x = degrees * lonshift / n      # The number of pixels to shift
+    
+    # Use scipy for the rest
+    mapdata_shift = shift(mapdata, [0, x], mode='wrap', order=spline_order)
+    
+    return mapdata_shift
