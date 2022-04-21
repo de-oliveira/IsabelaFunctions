@@ -7,10 +7,15 @@ IsabelaFunctions requires Python version 3.6 or higher.
 Some functions might require certain packages to be installed. You can find all of the required packages' names in 'environment.yml'.
 
 ## Installation
-If you would like to install the IsabelaFunctions's package, clone the project to create a local working copy:
+To download the package, clone the project to create a local working copy:
 
 ```bash
 $ git clone https://github.com/YOUR_USERNAME/IsabelaFunctions.git
+```
+To install the package, enter the top-level folder 'IsabelaFunctions' in a terminal, and do:
+
+```bash
+$ pip install -e .
 ```
 
 ## Documentation

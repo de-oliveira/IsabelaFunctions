@@ -1,5 +1,5 @@
 """
-Useful for the analysis and visualization of individual datapoints.
+Useful for the analysis and visualization of individual datapoints, as well as geometry of the Solar System.
 """
 
 import numpy as np
@@ -12,6 +12,8 @@ import datetime
 import os
 import IsabelaFunctions as isa
 from tqdm import tqdm
+from astropy.coordinates import solar_system_ephemeris, get_body_barycentric
+from astropy.coordinates.representation import PhysicsSphericalRepresentation, SphericalRepresentation
 
 
 def plot_altitude_model(new_alt, alt, lon, lat, br, anomaly, brange = None, lim = [20, 85, -15, 15], dawn = True):
@@ -1080,3 +1082,41 @@ def index_orbit(date, alt = None, lon = None, lat = None, br = None, lt = None, 
             
     return list_date, list_alt, list_lon, list_lat, list_br, list_lt, list_sza, list_vaz, list_vpol, list_vh
 
+
+def phi_angle(time):
+    """ Calculates the phi-angle (azimuth) between Earth and Mars, with respect to the Sun, for a given period of time.
+    
+    Parameters
+    ----------
+    time : astropy.time.Time object
+
+    Returns
+    -------
+    An array of phi-angles, same shape as time.
+
+    """
+    solar_system_ephemeris.set('de432s')
+    
+    # Calculating the position of Earth and Mars
+    coord_mars = get_body_barycentric('mars', time)
+    phy_mars = coord_mars.represent_as(PhysicsSphericalRepresentation)
+    
+    coord_earth = get_body_barycentric('earth', time)
+    phy_earth = coord_earth.represent_as(PhysicsSphericalRepresentation)
+    
+    # Calculating the angle Earth-Sun-Mars
+    
+    dot_product = (coord_mars.dot(coord_earth) / (phy_mars.r * phy_earth.r)).value
+    angle = np.rad2deg(np.arccos(dot_product))
+    
+    cross_product = coord_mars.cross(coord_earth).represent_as(SphericalRepresentation)
+    
+    # The angles go from 0 to 180 only, so we need to extend this to 0 to 360
+    for i in range(len(time)):
+        if cross_product.lat.value[i] < 0.:
+            angle[i] = 360 - angle[i]
+
+    return angle
+    
+
+#########################

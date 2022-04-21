@@ -5,6 +5,7 @@ Useful for the visualization of maps.
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import numpy as np
+from scipy.ndimage import shift
 
 
 def discrete_cmap(N, base_cmap = None):
@@ -223,9 +224,7 @@ def shift_map_longitude(mapdata, lonshift, spline_order=1):
     -------
     A shifted map
 
-    """
-    from scipy.ndimage import shift
-    
+    """    
     # Constant
     degrees = 360.0
     
