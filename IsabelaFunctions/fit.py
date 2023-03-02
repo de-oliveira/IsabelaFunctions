@@ -1,10 +1,67 @@
 """
-Computes different types of fits/regression for the data.
+Computes different types of statistis, means, fits/regression for the data.
 """
 
 import numpy as np
 from scipy.optimize import curve_fit
 
+
+def moving_average(a, nday, norm = True):
+    """ Calculates the linear moving average for a data set.
+    
+   Parameters:
+        a : array
+            The array containing the data.
+        nday : integer
+            The window in which the mean is taken, in days.
+        norm : bool, optional
+            If True, it returns the array normalized by the average. 
+            If false, it just subtracts the average from the array. Default is True.
+            
+    Returns:
+        An array the same size as the input.
+    """
+    a_averaged = np.zeros_like(a)
+    half_window = nday // 2
+    
+    for i in range(half_window, len(a) - half_window):
+        d1 = i - half_window
+        d2 = i + half_window
+        mean = np.nanmean(a[d1:d2])
+        
+        a_averaged[i] = a[i] - mean 
+        
+        if norm:
+            a_averaged[i] /= mean    
+
+    a_averaged[:half_window] = np.nan
+    a_averaged[-half_window:] = np.nan
+    
+    return a_averaged
+
+
+def residuals(x1, x2):
+    """ Calculates the residuals between two data sets.
+    
+   Parameters:
+        x1, x2: array
+            The arrays containing the data. They must have the same dimensions.
+                    
+    Returns:
+        An array of the same size of x1 containing the residuals.
+        
+        The total of the residuals (float).
+    """
+    res = x1 - x2
+    count = np.count_nonzero(~np.isnan(res))
+    res_total = np.nansum(res) / count
+    
+    return res, res_total
+
+
+def compute_L2_norm():
+    """ """
+    
 
 def gauss_function(x, off, a, x_mean, sigma):
     """ Equation for a Gaussian curve.
@@ -12,19 +69,15 @@ def gauss_function(x, off, a, x_mean, sigma):
     Parameters:
         x: array
             The independet variable where the data is measured.
-
         off: float
             Vertical offset of the Gaussian curve.
-
         a: float
             The height of the curve peak (negative for inverted bells).
-
         x_mean: float
             The mean in the x-axis, where the curve is centralized (x value for minimun y).
-
         sigma: float
             Standard deviation of the curve.
-
+            
     Returns:
         f: array
             The Gaussian function.
@@ -39,17 +92,14 @@ def gauss_fit(x, y):
     Parameters:
         x: array
             The independet variable where the data is measured.
-
         y: array
             The data points used for the best fit.
 
     Returns:
         popt: array
             The optimal values for the parameters. Respectively off, a, x_mean, and sigma.
-
         pcov: array
             The esimated covariance of popt. The diagonals provide the variance of the parameter estimate.
-
         perr: array
             One standard deviation errors on the parameters.
     """
@@ -68,10 +118,8 @@ def linear_function(x, a, b):
     Parameters:
         x: array
             The independet variable where the data is measured.
-
         a: float
             The linear coefficient.
-
         b: float
             The angular coefficient.
 
@@ -89,20 +137,16 @@ def linear_fit(x, y, y_error):
     Parameters:
         x: array
             The independet variable where the data is measured.
-
         y: array
             The data points used for the best fit.
-
         y_error: array
             The error in the data.
 
     Returns:
         popt: array
             The optimal values for the parameters. Respectively linear and angular coefficients.
-
         pcov: array
             The esimated covariance of popt. The diagonals provide the variance of the parameter estimate.
-
         perr: array
             One standard deviation errors on the parameters.
     """
@@ -135,23 +179,18 @@ def exp_fit(x, y, y_error, p0=(1, 1, 1)):
     Parameters:
         x: array
             The independet variable where the data is measured.
-
         y: array
             The data points used for the best fit.
-
         y_error: array
             The error in the data.
-
         p0: array
             The initial parameters. The default is p0 = (1, 1, 1)
 
     Returns:
         popt: array
             The optimal values for the parameters. Respectively linear and angular coefficients.
-
         pcov: array
             The esimated covariance of popt. The diagonals provide the variance of the parameter estimate.
-
         perr: array
             One standard deviation errors on the parameters.
     """
@@ -166,10 +205,8 @@ def deg2km_mars(alt, deg, lat = 0):
     Parameters:
         alt: float or array
             The altitudes where the data are measured.
-
         deg: float or array
             The measured offsets in degree.
-        
         lat: float or array
             The latitudes where the data are measured. This parameter is useful for when converting longitudes, since the longitude distance in km depends on the latitude.
             Default is zero. Leave it on default if converting latitude degrees to km.

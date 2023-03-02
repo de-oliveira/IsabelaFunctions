@@ -7,16 +7,100 @@ from tqdm import tqdm
 import IsabelaFunctions as isa
 import scipy.interpolate as interp
 import scipy.integrate as integrate
+import scipy.io as io
+import pandas as pd
+import julian as jl
+from datetime import datetime as dt
+from datetime import timedelta as td
 
 
-def filling_factors(B, sat_fac = 250., min_spot = 60., max_spot = 700., umb = 0.2, pen = 0.8):
+def read_filling_factors(file, cadence = 4):
+    """
+    Function for reading the filling factors of faculae/spots and the dates from a .npy file.
+
+    Parameters
+    ----------
+    file : .npy file
+        File containing the filling factors and the dates.
+    cadence : int
+        The cadence of the data is every 6h, so 4 measurements per day. For one measurement per day, we set cadence = 4.
+
+    Returns
+    -------
+    Arrays of filling factors and dates.
+
+    """
+    loading_file = np.load(file, allow_pickle = True).item()
+    data = list(loading_file.items())
+    data = np.array(data)
+    
+    dates = data[:, 0]
+    
+    filling_factors = np.zeros((len(dates), 181, 360))
+    for i in range(len(filling_factors)):
+        filling_factors[i] = data[i][1]
+    
+    filling_factors = filling_factors[::cadence]
+    dates = dates[::cadence]
+    
+    return filling_factors, dates
+        
+        
+def read_fluxes(file):
+    """
+    Function to read the fluxes and its parameters and to return them converted to physical units.
+
+    Parameters
+    ----------
+    file : .sav file
+        File with flux parameters.
+
+    Returns
+    -------
+    Arrays with wavelengths, angles and fluxes of quiet Sun, faculae, umbra and penumbra.
+
+    """
+    flux = io.readsav(file)
+
+    wavelengths_nm = flux['wav']
+    angles = flux['mu_input']
+    
+    # The fluxes are in W/m**2/sr/nm
+    flux_quiet = 1.* flux['intens_qs']        
+    flux_faculae = 1.* flux['intens_fac']
+    flux_umbra = 1.* flux['intens_um']
+    flux_penumbra = 1.* flux['intens_pen']
+
+    # Convert fluxes to physical units
+    solar_radius_AU = 0.00465047
+    pixel_size_at_equator = 2 * np.pi * solar_radius_AU / 360.
+    solid_angle_pixel = pixel_size_at_equator**2
+
+    flux_quiet *= solid_angle_pixel
+    flux_faculae *= solid_angle_pixel
+    flux_umbra *= solid_angle_pixel
+    flux_penumbra *= solid_angle_pixel
+
+    return wavelengths_nm, angles, flux_quiet, flux_faculae, flux_umbra, flux_penumbra
+    
+
+def compute_interpolations(flux, angles, number_of_wavelengths):
+    interpolation_function = []
+    
+    for wavelength in range(number_of_wavelengths):
+        interpolation_function.append(interp.interp1d(angles, flux[wavelength], fill_value = 'extrapolate'))
+    
+    return interpolation_function
+
+
+def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 700., ratio_umb = 0.2, ratio_pen = 0.8):
     """
     Calculation of filling factors of faculae and spots based on an input magnetic field map.
     
     
     Parameters
     ----------
-    B : 2D-array
+    B_input : 2D-array
         The magnetic field at each pixel.
     sat_fac : float, optional
         The saturation threshold for the magnetic field of the faculae, in G. The default is 250.
@@ -24,40 +108,83 @@ def filling_factors(B, sat_fac = 250., min_spot = 60., max_spot = 700., umb = 0.
         The lower cut-off value for the magnetic field of the spots, in G. The default is 60.
     max_spots : float, optional
         The upper cut-off value for the magnetic field of the spots, in G. The default is 700.
-    umb : float, optional
+    ratio_umb : float, optional
         The ratio of umbra in the spots, between 0 and 1. The default is 0.2.
-    pen : float, optional
+    ratio_pen : float, optional
         The ratio of penumbra in the spots, between 0 and 1. The default is 0.8.
 
     Returns
     -------
-    3 arrays, with the same shape as B, containing the filling factors of the faculae, umbra, and penumbra, respectively.
+    3 arrays, with the same shape as B_input, containing the filling factors of the faculae, umbra, and penumbra, respectively.
 
     """   
-    ff_spots = np.zeros_like(B)
-    between = np.logical_and(abs(B) < max_spot, abs(B) >= min_spot)
+    ff_spots = np.zeros_like(B_input)
+    B_pixel = np.logical_and(abs(B_input) < max_spot, abs(B_input) >= min_spot)
     
-    ff_spots[abs(B) >= max_spot] = 1.
-    ff_spots[between] = (abs(B[between]) - min_spot) / (max_spot - min_spot)
+    ff_spots[abs(B_input) >= max_spot] = 1.
+    ff_spots[B_pixel] = (abs(B_input[B_pixel]) - min_spot) / (max_spot - min_spot)
     
-    ff_umbra = umb * ff_spots
-    ff_penumbra = pen * ff_spots
+    ff_umbra = ratio_umb * ff_spots
+    ff_penumbra = ratio_pen * ff_spots
     
-    ff_faculae = np.zeros_like(B)
-    under = abs(B) < sat_fac
+    ff_faculae = np.zeros_like(B_input)
+    B_pixel = abs(B_input) < sat_fac
     
-    ff_faculae[abs(B) >= sat_fac] = 1.
-    ff_faculae[under] = abs(B[under]) / sat_fac
+    ff_faculae[abs(B_input) >= sat_fac] = 1.
+    ff_faculae[B_pixel] = abs(B_input[B_pixel]) / sat_fac
     
     # Ignore bins already covered by spots, not allowing "mixed" bins
     ff_faculae[ff_spots != 0.] = 0.
     
     # Ignoring bins outside full-disc magnetogram
-    ff_faculae[B == 0] = np.nan
-    ff_umbra[B == 0] = np.nan
-    ff_penumbra[B == 0] = np.nan
+    ff_faculae[B_input == 0] = np.nan
+    ff_umbra[B_input == 0] = np.nan
+    ff_penumbra[B_input == 0] = np.nan
 
-    return ff_faculae, ff_umbra, ff_penumbra    
+    return ff_faculae, ff_umbra, ff_penumbra
+
+
+def compute_ff_grids(B_input, B_sat = 250., B_max = 700., half_number_of_steps = 4):
+    """
+    Calculation of a grid of filling factors of faculae and spots based on an input magnetic field map.
+    The grid will be centered on B_sat and B_max, with (half_number_of_steps * 2 + 1) steps.
+
+    Parameters
+    ----------
+    B_input : 2D-array
+        The magnetic field at each pixel.
+    B_sat : float, optional
+        The saturation threshold for the magnetic field of the faculae, in G. The default is 250.
+    B_max : float, optional
+        The upper cut-off value for the magnetic field of the spots, in G. The default is 700.
+    half_number_of_steps : integer, optional
+        The total number of steps in the grid is equal to half_number_of_steps * 2 + 1. The default is 4.
+        
+    Returns
+    -------
+    3 grid arrays, containing the filling factors of the faculae, umbra, and penumbra, respectively.
+
+    """
+
+    nday, nlat, nlon = B_input.shape
+    
+    length = half_number_of_steps * 2 + 1
+    step_size = 5.
+    
+    grid_B_sat = np.linspace(B_sat - half_number_of_steps * step_size, B_sat + half_number_of_steps * step_size, length)
+    grid_B_max = np.linspace(B_max - half_number_of_steps * step_size, B_max + half_number_of_steps * step_size, length)
+    
+    ff_faculae = np.zeros((nday, nlat, nlon, length, length))
+    ff_umbra = np.zeros_like(ff_faculae)
+    ff_penumbra = np.zeros_like(ff_faculae)
+        
+    for day in range(nday):
+        for i in range(length):
+            for j in range(length):
+                ff_faculae[day, :, :, i, j], ff_umbra[day, :, :, i, j], ff_penumbra[day, :, :, i, j] = \
+                    isa.sun.compute_filling_factors(B_input[day], grid_B_sat[i], grid_B_max[j])
+
+    return ff_faculae, ff_umbra, ff_penumbra
 
 
 def visible(y_obs, y_pos, delta_lambda):
@@ -69,124 +196,10 @@ def visible(y_obs, y_pos, delta_lambda):
                  np.cos(np.deg2rad(y_obs)) * np.cos(np.deg2rad(y_pos)) * np.cos(np.deg2rad(delta_lambda)))
 
 
-def irradiance_from_Br(B, ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, \
-                    interp_um, interp_penum, x_obs = None, y_obs = None):
+def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, \
+                    interp_um, interp_penum, x_obs, y_obs):
     """
-    Calculation of solar spectral irradiance for 1 wavelength, for multiple days, from a magnetic field map.
-    
-    
-    Parameters
-    ----------
-    B : 3D-array
-        The magnetic field at each pixel. Must be in the shape (ndays, nlat, nlon).
-    ff_fac : 3D array
-        Filling factors of the faculae, same shape as B.
-    ff_umbra : 3D array
-        Filling factors of the umbra, same shape as B.
-    ff_penumbra : 3D array
-        Filling factors of the penumbra, same shape as B.
-    interp_qs : function
-        Interpolation function (flux) for the quiet Sun.
-    interp_fac : function
-        Interpolation function (flux) for the faculae.
-    interp_um : function
-        Interpolation function (flux) for the umbra.
-    interp_penum : function
-        Interpolation function (flux) for the penumbra.
-    x_obs : float, optional
-        The longitude of the observer. The default is 0.
-    y_obs : float, optional
-        The latitude of the observer. The default is 0.
-
-    Returns
-    -------
-    An array with length (nday).
-  
-    """
-    nday, nlat, nlon = B.shape
-    
-    if x_obs is None:
-        x_obs = np.zeros(nday)
-        
-    if y_obs is None:
-        y_obs = np.zeros(nday)
-    
-    x = np.linspace(1., 360., 360)
-    y = np.linspace(-90., 90., 181)
-    x_not_used, y_pos = np.meshgrid(x, y)    
-    
-    irradiance = np.zeros(nday)
-    mask_qs = np.zeros_like(B)
-    mask_fac = np.zeros_like(B)
-    mask_umb = np.zeros_like(B)
-    mask_pen = np.zeros_like(B)
-    vis = np.zeros_like(B)
-    
-    for i in tqdm(range(nday)):
-        
-        # Check if the whole map is nan
-        if np.all(np.isnan(B[i])):
-            continue
-        
-        # Take the (~) central colatitude of the map y0, and calculate the index of the central longitude x0
-        y0 = 1. * B[i][90]
-        lon = np.linspace(0, 359, 360)
-        
-        while (y0 == y0)[-1]:
-            lon = np.roll(lon, 1)
-            y0 = np.roll(y0, 1)
-        
-        equals = y0 == y0
-        N = sum(equals)
-        ind = N // 2
-        
-        if (N % 2) == 0:
-            ind2 = ind - 1
-            x1 = lon[np.where(equals)[0][ind]]
-            x2 = lon[np.where(equals)[0][ind2]]
-            
-            if np.logical_and(x1 == 0.0, x2 == 359.):
-                x0 = 359.5
-            else:
-                x0 = (x1 + x2) / 2
-        else:
-            x0 = lon[np.where(equals)[0][ind]]
-        
-        # Create the arrays of grid (I had to flip it to be correct)
-        x_lon = np.flip((np.linspace(0, 359, 360) + x0) % 360)
-        x_pos, y_not_used = np.meshgrid(x_lon, y)
-        
-        delta_lambda = abs(x_pos - x_obs[i])
-        vis[i] = isa.sun.visible(y_obs[i], y_pos, delta_lambda)
-        
-        # an observer will see only half of the sphere
-        vis[vis < 0.] = 0.
-        
-        # solid angle of each pixel in the visible disk, accounts for the reduction in the pixel area with latitude
-        mask_qs[i] = vis[i] * np.cos(np.deg2rad(y_pos))
-        
-        # filling factors multiplied with solid angle of the pixel
-        mask_fac[i] = mask_qs[i] * ff_faculae[i]
-        mask_umb[i] = mask_qs[i] * ff_umbra[i]
-        mask_pen[i] = mask_qs[i] * ff_penumbra[i]
-        
-        # Calculation of irradiance                
-        irr_qs = np.nansum(mask_qs[i] * interp_qs(vis[i]))
-        irr_fac = np.nansum(mask_fac[i] * (interp_fac(vis[i]) - interp_qs(vis[i])))
-        irr_umb = np.nansum(mask_umb[i] * (interp_um(vis[i]) - interp_qs(vis[i])))
-        irr_pen = np.nansum(mask_pen[i] * (interp_penum(vis[i]) - interp_qs(vis[i])))
-        
-        irradiance[i] = irr_qs + irr_fac + irr_umb + irr_pen
-
-    irradiance[irradiance == 0.] = np.nan
-    
-    return irradiance
-
-
-def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, \
-                    interp_um, interp_penum, x_obs = 0., y_obs = 0.):
-    """
-    Calculation of irradiance from a full surface map (e.g. from simulation), from filling factors (no Br).
+    Calculation of irradiance from a full surface map (e.g. from simulation), from filling factors.
     Contribution by Sowmya Krishnamurthy.
 
     Parameters
@@ -205,34 +218,31 @@ def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp
         Interpolation function (flux) for the umbra.
     interp_penum : function
         Interpolation function (flux) for the penumbra.
-    x_obs : float, optional
-        The longitude of the observer. The default is 0.
-    y_obs : float, optional
-        The latitude of the observer. The default is 0.
+    x_obs : Array of len(nday)
+        The longitudes of the observer.
+    y_obs : Array of len(nday)
+        The latitudes of the observer.
 
     Returns
     -------
-    An array with length (nday).
+    An array of len(nday).
 
     """
     nday, nlat, nlon = ff_faculae.shape
     days = np.linspace(0, nday-1, nday)
+    irradiance = np.zeros(nday)
     
     # Defining the visible disk
     x = np.linspace(1., 360., nlon)
     y = np.linspace(-90., 90., nlat)
-    x_pos, y_pos = np.meshgrid(x, y)    
-    
-    delta_lambda = abs(x_pos - x_obs)
-    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
-    vis[vis < 0.] = 0.                          # an observer will see only half of the sphere
-    vis_corr = vis * np.cos(np.deg2rad(y_pos))  # solid angle of each pixel in the visible disk
-    
-    # Calculation of irradiance
-    irradiance = np.zeros(nday)
-    irr_qs = np.nansum(vis_corr * interp_qs(vis))
+    x_pos, y_pos = np.meshgrid(x, y)
     
     for i in range(nday):  
+        
+        delta_lambda = abs(x_pos - x_obs[i])
+        vis = isa.sun.visible(y_obs[i], y_pos, delta_lambda)
+        vis[vis < 0.] = 0.                          # an observer will see only half of the sphere
+        vis_corr = vis * np.cos(np.deg2rad(y_pos))  # solid angle of each pixel in the visible disk
         
         # Rotation by 13.38 degrees per day
         lonshift = 13.38 * days[i]
@@ -242,11 +252,12 @@ def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp
         mask_umb = vis_corr * isa.mapsetup.shift_map_longitude(ff_umbra[i], lonshift)
         mask_pen = vis_corr * isa.mapsetup.shift_map_longitude(ff_penumbra[i], lonshift)
         
-        # Calculation of irradiance                
+        # Calculation of irradiance
+        irr_qs = np.nansum(vis_corr * interp_qs(vis))              
         delta_fac = np.nansum(mask_fac * (interp_fac(vis) - interp_qs(vis)))
         delta_umb = np.nansum(mask_umb * (interp_um(vis) - interp_qs(vis)))
         delta_pen = np.nansum(mask_pen * (interp_penum(vis) - interp_qs(vis)))        
-                       
+
         irradiance[i] = irr_qs + delta_fac + delta_umb + delta_pen
 
     irradiance[irradiance == 0.] = np.nan
@@ -254,7 +265,7 @@ def irradiance_full_surface(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp
     return irradiance
 
 
-def s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_fach, \
+def compute_s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_fach, \
             interp_fack, interp_facr, interp_facv, x_obs = 0., y_obs = 0.):
     """
     Calculation of S-index from a full surface map (e.g. from simulation), from filling factors (no Br).
@@ -292,28 +303,22 @@ def s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_f
     """
     nday, nlat, nlon = ff_faculae.shape
     days = np.linspace(0, nday-1, nday)
+    s_index = np.zeros(nday)
     
-    # Defining the visible disk
     x = np.linspace(1., 360., nlon)
     y = np.linspace(-90., 90., nlat)
     x_pos, y_pos = np.meshgrid(x, y)    
-    
-    delta_lambda = abs(x_pos - x_obs)
-    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
-    vis[vis < 0.] = 0.                          # an observer will see only half of the sphere
-    vis_corr = vis * np.cos(np.deg2rad(y_pos))  # solid angle of each pixel in the visible disk
-
-    s_index = np.zeros(nday)
-    
+     
     for i in range(nday):  
-        
-        # Rotation by 13.38 degrees per day
+        delta_lambda = abs(x_pos - x_obs[i])
+        vis = isa.sun.visible(y_obs[i], y_pos, delta_lambda)
+        vis[vis < 0.] = 0.                          
+        vis_corr = vis * np.cos(np.deg2rad(y_pos))  
+
         lonshift = 13.38 * days[i]
 
-        # Rotated filling factors multiplied with solid angle of the pixel
         mask_fac = vis_corr * isa.mapsetup.shift_map_longitude(ff_faculae[i], lonshift)
         
-        # Calculation of the contribution of each band  
         qsh = np.nansum(vis_corr * interp_qsh(vis))
         qsk = np.nansum(vis_corr * interp_qsk(vis))
         qsr = np.nansum(vis_corr * interp_qsr(vis))
@@ -327,13 +332,11 @@ def s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_f
         delta_facr = np.nansum(mask_fac * (interp_facr(vis) - interp_qsr(vis)))
         delta_facv = np.nansum(mask_fac * (interp_facv(vis) - interp_qsv(vis)))
         
-        # Calculation of the flux
         fluxh = qsh + delta_fach
         fluxk = qsk + delta_fack
         fluxr = qsr + delta_facr
         fluxv = qsv + delta_facv
         
-        # Calculation of the S-index
         fluxratio = (fluxh + fluxk) / (fluxr + fluxv)
 
         s_index[i] = 2.53 * 8. * fluxratio
@@ -341,41 +344,101 @@ def s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_f
     return s_index
 
 
-def moving_average(a, nday, norm = True):
-    """ Calculates the linear moving average for a data set.
-    
-   Parameters:
-        a : array
-            The array containing the data.
-        nday : integer
-            The window in which the mean is taken, in days.
-        norm : bool, optional
-            If True, it returns the array normalized by the average. 
-            If false, it just subtracts the average from the array. Default is True.
-            
-    Returns:
-        An array the same size as the input.
+def compute_tsi_from_ssi(ssi, wavelengths, number_of_days):
     """
-    a_averaged = np.zeros_like(a)
-    half_window = nday // 2
-    
-    for i in range(half_window, len(a) - half_window):
-        d1 = i - half_window
-        d2 = i + half_window
-        mean = np.nanmean(a[d1:d2])
+    Computes total solar irradiance from spectral solar irradiance.
+
+    Parameters
+    ----------
+    ssi : array
+    wavelengths : array
+    number_of_days : integer
+
+    Returns
+    -------
+    tsi : array with length number_of_days
+
+    """
+    tsi = np.empty((number_of_days))
+
+    for n in range(number_of_days):
         
-        a_averaged[i] = a[i] - mean 
+        tmp = ssi[:, n]
+        tmp2 = tmp[~np.isnan(tmp)]
+        tmp3 = wavelengths[~np.isnan(tmp)]
+        tsi[n] = integrate.trapz(tmp2, tmp3)
         
-        if norm:
-            a_averaged[i] /= mean    
+    return tsi
 
-    a_averaged[:half_window] = np.nan
-    a_averaged[-half_window:] = np.nan
+
+def load_satire_ssi(file, n_days, start_year = 2010, start_month = 6, start_day = 17):
+    """
+    Loads the SATIRE-S SSI data file for a specific time period
+
+    Parameters
+    ----------
+    file : str
+        Path to the data file.
+    n_days : int
+        Number of days since the start date to load the data.
+    start_year : int, optional
+        The default is 2010.
+    start_month : int, optional
+        The default is 6.
+    start_day : int, optional
+        The default is 17.
+
+    Returns
+    -------
+    ssi : 2D array
+        Array with teh SSI for each day adn wavelength.
+    wl_lower : 2D array
+        Array of wavelengths.
+
+    """
+    df = pd.read_csv(file, skiprows = 29, names = ['julian', 'bin_lower', 'bin_upper', 'SSI', 'index'], \
+                      delim_whitespace = True, skipinitialspace = True, infer_datetime_format = True)
+
+    julian  = np.array(df.julian)
+    wl_lower0 = np.array(df.bin_lower)
+    wl_upper0 = np.array(df.bin_upper)
+    ssi0 = np.array(df.SSI)
+
+    date0 = []
+    for i in range(len(julian)):
+        date0.append(jl.from_jd(julian[i]))
+    date0 = np.array(date0)
+
+    start_date = dt(start_year, start_month, start_day, 0, 0)          
+    end_date = start_date + td(days = n_days)     
+
+    date = []
+    wl_lower = []
+    wl_upper = []
+    ssi = []
+    for i in range(len(date0)):
+        if date0[i] >= start_date and date0[i] < end_date:
+            date.append(date0[i])
+            wl_lower.append(wl_lower0[i])
+            wl_upper.append(wl_upper0[i])
+            ssi.append(ssi0[i])
+
+    date = np.array(date)
+    wl_lower = np.array(wl_lower)
+    wl_upper = np.array(wl_upper)
+    ssi = np.array(ssi)
     
-    return a_averaged
+    n_wl = len(np.unique(wl_lower))
+
+    date = np.reshape(date, (n_days, n_wl))
+    ssi = np.reshape(ssi, (n_days, n_wl))
+    wl_lower = np.reshape(wl_lower, (n_days, n_wl)) 
+    wl_upper = np.reshape(wl_upper, (n_days, n_wl))
+    
+    return ssi, wl_lower
 
 
-def virgo(wavelengths, irradiance):
+def compute_irradiance_virgo(wavelengths, irradiance):
     """ Contribution by Nina Nèmec
         Calculation of irradiances within the VIRGO/SPM channels (blue, green and red).
     
@@ -439,26 +502,7 @@ def virgo(wavelengths, irradiance):
     return irr_blue, irr_green, irr_red
 
 
-def residuals(x1, x2):
-    """ Calculates the residuals between two data sets.
-    
-   Parameters:
-        x1, x2: array
-            The arrays containing the data. They must have the same dimensions.
-                    
-    Returns:
-        An array of the same size of x1 containing the residuals.
-        
-        The total of the residuals (float).
-    """
-    res = x1 - x2
-    count = np.count_nonzero(~np.isnan(res))
-    res_total = np.nansum(res) / count
-    
-    return res, res_total
-
-
-def flux_map(flux_quiet, flux_faculae, flux_umbra, flux_penumbra, x_obs):
+def compute_flux_map(flux_quiet, flux_faculae, flux_umbra, flux_penumbra, x_obs):
     """
     NOT USED.
     Computes the general irradiance of faculae and sunspots in a 11-rings circle, 
@@ -525,54 +569,6 @@ def flux_map(flux_quiet, flux_faculae, flux_umbra, flux_penumbra, x_obs):
     return quiet_sun, delta_faculae, delta_umbra, delta_penumbra
 
 
-def varying_ff(B, interp_qs, interp_fac, interp_um, interp_penum, wavelengths,\
-               fac_range, spot_min_range, spot_max_range, x_obs = None, y_obs = None):
-    """
-    This script does not work. It requires a big amount of space.
-    """
-    
-    nday, nlat, nlon = B.shape
-    
-    # Preparing some arrays
-    step1 = 10.
-    fac_len = int((fac_range[1] - fac_range[0]) / step1 + 1.0)
-    spot_min_len = int((spot_min_range[1] - spot_min_range[0]) / step1 + 1.0)
-    spot_max_len = int((spot_max_range[1] - spot_max_range[0]) / step1 + 1.0)
-    
-    fac = np.linspace(fac_range[0], fac_range[1], fac_len)
-    spot_min = np.linspace(spot_min_range[0], spot_min_range[1], spot_min_len)
-    spot_max = np.linspace(spot_max_range[0], spot_max_range[1], spot_max_len)
-    #matrix = np.empty((fac_len, spot_min_len, spot_max_len))
-    
-    ff_faculae = np.empty((nday, nlat, nlon, fac_len, spot_min_len, spot_max_len))
-    ff_umbra = np.empty_like(ff_faculae)
-    ff_penumbra = np.empty_like(ff_faculae)
-    
-    # Calculation of the filling factors
-    for i in range(nday):
-        for j in range(fac_len):
-            for k in range(spot_min_len):
-                for l in range(spot_max_len):
-                    ff_faculae[i, :, :, j, k, l], ff_umbra[i, :, :, j, k, l], ff_penumbra[i, :, :, j, k, l] = \
-                    isa.sun.filling_factors(B[i], fac[j], spot_min[k], spot_max[l])
-                
-    # Selecting only the regions where we have data    
-    B[B == 0.0] = np.nan
-    
-    # Calculation of irradiance
-    irradiance = np.zeros((nday, fac_len, spot_min_len, spot_max_len, len(wavelengths)))
-    
-    for j in range(fac_len):
-        for k in range(spot_min_len):
-            for l in range(spot_max_len):
-                for m in range(len(wavelengths)):
-                    irradiance[:, j, k, l, m] = isa.sun.ss_irradiance(B, wavelengths[m], ff_faculae[:, :, :, j, k, l], \
-                    ff_umbra[:, :, :, j, k, l], ff_penumbra[:, :, :, j, k, l], \
-                    interp_qs[m], interp_fac[m], interp_um[m], interp_penum[m], x_obs, y_obs)
-
-    return irradiance
-
-
 def angle_to_period(angle):
     """ Converts an angle within the ecliptic to its correspondent day in the past
     and in the future. Used in the irradiance extrapolation method (Thiemann et al., 2017).
@@ -589,5 +585,114 @@ def angle_to_period(angle):
     
     return t1, t2
 
+
+def irradiance_from_Br(B, ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, \
+                    interp_um, interp_penum, x_obs = None, y_obs = None):
+    """
+    Calculation of solar spectral irradiance for 1 wavelength, for multiple days, from a filling factors map.
+    Only works for a map of the visible disk. For a full surface map, use irradiance_full_surface below.
+    
+    Parameters
+    ----------
+    B : 3D-array
+        The magnetic field at each pixel. Must be in the shape (ndays, nlat, nlon).
+    ff_fac : 3D array
+        Filling factors of the faculae, same shape as B.
+    ff_umbra : 3D array
+        Filling factors of the umbra, same shape as B.
+    ff_penumbra : 3D array
+        Filling factors of the penumbra, same shape as B.
+    interp_qs : function
+        Interpolation function (flux) for the quiet Sun.
+    interp_fac : function
+        Interpolation function (flux) for the faculae.
+    interp_um : function
+        Interpolation function (flux) for the umbra.
+    interp_penum : function
+        Interpolation function (flux) for the penumbra.
+    x_obs : float, optional
+        The longitude of the observer. The default is 0.
+    y_obs : float, optional
+        The latitude of the observer. The default is 0.
+
+    Returns
+    -------
+    An array with length (nday).
+  
+    """
+    nday, nlat, nlon = B.shape
+    
+    if x_obs is None:
+        x_obs = np.zeros(nday)
+        
+    if y_obs is None:
+        y_obs = np.zeros(nday)
+    
+    x = np.linspace(1., 360., 360)
+    y = np.linspace(-90., 90., 181)
+    x_not_used, y_pos = np.meshgrid(x, y)    
+    
+    irradiance = np.zeros(nday)
+    mask_qs = np.zeros_like(B)
+    mask_fac = np.zeros_like(B)
+    mask_umb = np.zeros_like(B)
+    mask_pen = np.zeros_like(B)
+    vis = np.zeros_like(B)
+    
+    for i in tqdm(range(nday)):
+        
+        # Take the (~) central colatitude of the map y0, and calculate the index of the central longitude x0
+        y0 = 1. * B[i][90] # <<<<<----- THIS IS WRONG!!
+        lon = np.linspace(0, 359, 360)
+        
+        while (y0 == y0)[-1]:
+            lon = np.roll(lon, 1)
+            y0 = np.roll(y0, 1)
+        
+        equals = y0 == y0
+        N = sum(equals)
+        ind = N // 2
+        
+        if (N % 2) == 0:
+            ind2 = ind - 1
+            x1 = lon[np.where(equals)[0][ind]]
+            x2 = lon[np.where(equals)[0][ind2]]
+            
+            if np.logical_and(x1 == 0.0, x2 == 359.):
+                x0 = 359.5
+            else:
+                x0 = (x1 + x2) / 2
+        else:
+            x0 = lon[np.where(equals)[0][ind]]
+        
+        # Create the arrays of grid (I had to flip it to be correct)
+        x_lon = np.flip((np.linspace(0, 359, 360) + x0) % 360)
+        x_pos, y_not_used = np.meshgrid(x_lon, y)
+        
+        delta_lambda = abs(x_pos - x_obs[i])
+        vis[i] = isa.sun.visible(y_obs[i], y_pos, delta_lambda)
+        
+        # an observer will see only half of the sphere
+        vis[vis < 0.] = 0.
+        
+        # solid angle of each pixel in the visible disk, accounts for the reduction in the pixel area with latitude
+        mask_qs[i] = vis[i] * np.cos(np.deg2rad(y_pos))
+        
+        # filling factors multiplied with solid angle of the pixel
+        mask_fac[i] = mask_qs[i] * ff_faculae[i]
+        mask_umb[i] = mask_qs[i] * ff_umbra[i]
+        mask_pen[i] = mask_qs[i] * ff_penumbra[i]
+        
+        # Calculation of irradiance                
+        irr_qs = np.nansum(mask_qs[i] * interp_qs(vis[i]))
+        irr_fac = np.nansum(mask_fac[i] * (interp_fac(vis[i]) - interp_qs(vis[i])))
+        irr_umb = np.nansum(mask_umb[i] * (interp_um(vis[i]) - interp_qs(vis[i])))
+        irr_pen = np.nansum(mask_pen[i] * (interp_penum(vis[i]) - interp_qs(vis[i])))
+        
+        irradiance[i] = irr_qs + irr_fac + irr_umb + irr_pen
+
+    irradiance[irradiance == 0.] = np.nan
+    
+    return irradiance
 
 ########################################################################################
