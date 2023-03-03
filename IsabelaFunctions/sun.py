@@ -9,9 +9,8 @@ import scipy.interpolate as interp
 import scipy.integrate as integrate
 import scipy.io as io
 import pandas as pd
-import julian as jl
+import julian
 from datetime import datetime as dt
-from datetime import timedelta as td
 
 
 def read_filling_factors(file, cadence = 4):
@@ -196,10 +195,10 @@ def visible(y_obs, y_pos, delta_lambda):
                  np.cos(np.deg2rad(y_obs)) * np.cos(np.deg2rad(y_pos)) * np.cos(np.deg2rad(delta_lambda)))
 
 
-def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, \
+def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
                     interp_um, interp_penum, x_obs, y_obs):
     """
-    Calculation of irradiance from a full surface map (e.g. from simulation), from filling factors.
+    Calculation of irradiance from a full surface map of filling factors.
     Contribution by Sowmya Krishnamurthy.
 
     Parameters
@@ -218,10 +217,10 @@ def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
         Interpolation function (flux) for the umbra.
     interp_penum : function
         Interpolation function (flux) for the penumbra.
-    x_obs : Array of len(nday)
-        The longitudes of the observer.
-    y_obs : Array of len(nday)
-        The latitudes of the observer.
+    x_obs : float
+        The longitude of the observer.
+    y_obs : float
+        The latitude of the observer.
 
     Returns
     -------
@@ -232,18 +231,17 @@ def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
     days = np.linspace(0, nday-1, nday)
     irradiance = np.zeros(nday)
     
-    # Defining the visible disk
     x = np.linspace(1., 360., nlon)
     y = np.linspace(-90., 90., nlat)
     x_pos, y_pos = np.meshgrid(x, y)
     
+    delta_lambda = abs(x_pos - x_obs)
+    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
+    vis[vis < 0.] = 0.                          # an observer will see only half of the sphere
+    vis_corr = vis * np.cos(np.deg2rad(y_pos))  # solid angle of each pixel in the visible disk
+
     for i in range(nday):  
-        
-        delta_lambda = abs(x_pos - x_obs[i])
-        vis = isa.sun.visible(y_obs[i], y_pos, delta_lambda)
-        vis[vis < 0.] = 0.                          # an observer will see only half of the sphere
-        vis_corr = vis * np.cos(np.deg2rad(y_pos))  # solid angle of each pixel in the visible disk
-        
+
         # Rotation by 13.38 degrees per day
         lonshift = 13.38 * days[i]
 
@@ -265,8 +263,67 @@ def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
     return irradiance
 
 
-def compute_s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_fach, \
-            interp_fack, interp_facr, interp_facv, x_obs = 0., y_obs = 0.):
+def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
+                    interp_um, interp_penum, x_obs, y_obs):
+    """
+    Calculation of irradiance from a full surface map of filling factors.
+    Contribution by Sowmya Krishnamurthy.
+
+
+    Parameters
+    ----------
+    ff_faculae : 2D array
+        Filling factors of the faculae of shape (lat,lon).
+    ff_umbra : 2D array
+        Filling factors of the umbra of shape (lat,lon).
+    ff_penumbra : 2D array
+        Filling factors of the penumbra of shape (lat,lon).
+    interp_qs : function
+        Interpolation function (flux) for the quiet Sun.
+    interp_fac : function
+        Interpolation function (flux) for the faculae.
+    interp_um : function
+        Interpolation function (flux) for the umbra.
+    interp_penum : function
+        Interpolation function (flux) for the penumbra.
+    x_obs : float
+        The longitude of the observer.
+    y_obs : float
+        The latitude of the observer.
+
+    Returns
+    -------
+    irradiance : float
+
+    """
+    
+    x = np.linspace(1., 360., 360)
+    y = np.linspace(-90., 90., 181)
+    x_pos, y_pos = np.meshgrid(x, y)
+    
+    delta_lambda = abs(x_pos - x_obs)
+    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
+    vis[vis < 0.] = 0.                          # an observer will see only half of the sphere
+    vis_corr = vis * np.cos(np.deg2rad(y_pos))  # solid angle of each pixel in the visible disk
+
+    # Filling factors multiplied with solid angle of the pixel
+    mask_fac = vis_corr * ff_faculae
+    mask_umb = vis_corr * ff_umbra
+    mask_pen = vis_corr * ff_penumbra
+    
+    # Calculation of irradiance
+    irr_qs = np.nansum(vis_corr * interp_qs(vis))              
+    delta_fac = np.nansum(mask_fac * (interp_fac(vis) - interp_qs(vis)))
+    delta_umb = np.nansum(mask_umb * (interp_um(vis) - interp_qs(vis)))
+    delta_pen = np.nansum(mask_pen * (interp_penum(vis) - interp_qs(vis)))        
+
+    irradiance = irr_qs + delta_fac + delta_umb + delta_pen
+
+    return irradiance
+    
+
+def compute_s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_fach,
+            interp_fack, interp_facr, interp_facv, x_obs, y_obs):
     """
     Calculation of S-index from a full surface map (e.g. from simulation), from filling factors (no Br).
     Contribution by Sowmya Krishnamurthy.
@@ -291,10 +348,10 @@ def compute_s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, 
         Interpolation function (flux x mu) of the faculae, for Ca II R band.
     interp_facv : function
         Interpolation function (flux x mu) of the faculae, for Ca II V band.
-    x_obs : float, optional
-        The longitude of the observer. The default is 0.
-    y_obs : float, optional
-        The latitude of the observer. The default is 0.
+    x_obs : float
+        The longitude of the observer.
+    y_obs : float
+        The latitude of the observer.
 
     Returns
     -------
@@ -308,12 +365,13 @@ def compute_s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, 
     x = np.linspace(1., 360., nlon)
     y = np.linspace(-90., 90., nlat)
     x_pos, y_pos = np.meshgrid(x, y)    
-     
+    
+    delta_lambda = abs(x_pos - x_obs)
+    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
+    vis[vis < 0.] = 0.                          
+    vis_corr = vis * np.cos(np.deg2rad(y_pos))  
+
     for i in range(nday):  
-        delta_lambda = abs(x_pos - x_obs[i])
-        vis = isa.sun.visible(y_obs[i], y_pos, delta_lambda)
-        vis[vis < 0.] = 0.                          
-        vis_corr = vis * np.cos(np.deg2rad(y_pos))  
 
         lonshift = 13.38 * days[i]
 
@@ -338,7 +396,6 @@ def compute_s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, 
         fluxv = qsv + delta_facv
         
         fluxratio = (fluxh + fluxk) / (fluxr + fluxv)
-
         s_index[i] = 2.53 * 8. * fluxratio
         
     return s_index
@@ -396,45 +453,26 @@ def load_satire_ssi(file, n_days, start_year = 2010, start_month = 6, start_day 
         Array of wavelengths.
 
     """
-    df = pd.read_csv(file, skiprows = 29, names = ['julian', 'bin_lower', 'bin_upper', 'SSI', 'index'], \
+    df = pd.read_csv(file, skiprows = 29, names = ['julian', 'bin_lower', 'bin_upper', 'SSI', 'index'],
                       delim_whitespace = True, skipinitialspace = True, infer_datetime_format = True)
 
-    julian  = np.array(df.julian)
+    julian_days  = np.array(df.julian)
     wl_lower0 = np.array(df.bin_lower)
-    wl_upper0 = np.array(df.bin_upper)
     ssi0 = np.array(df.SSI)
 
-    date0 = []
-    for i in range(len(julian)):
-        date0.append(jl.from_jd(julian[i]))
-    date0 = np.array(date0)
+    start_date = julian.to_jd(dt(start_year, start_month, start_day, 12, 0))          
+    end_date = start_date + n_days 
 
-    start_date = dt(start_year, start_month, start_day, 0, 0)          
-    end_date = start_date + td(days = n_days)     
-
-    date = []
-    wl_lower = []
-    wl_upper = []
-    ssi = []
-    for i in range(len(date0)):
-        if date0[i] >= start_date and date0[i] < end_date:
-            date.append(date0[i])
-            wl_lower.append(wl_lower0[i])
-            wl_upper.append(wl_upper0[i])
-            ssi.append(ssi0[i])
-
-    date = np.array(date)
-    wl_lower = np.array(wl_lower)
-    wl_upper = np.array(wl_upper)
-    ssi = np.array(ssi)
+    condition = np.logical_and(julian_days >= start_date, julian_days < end_date)
+    
+    wl_lower = wl_lower0[condition]
+    ssi = ssi0[condition]
     
     n_wl = len(np.unique(wl_lower))
 
-    date = np.reshape(date, (n_days, n_wl))
     ssi = np.reshape(ssi, (n_days, n_wl))
     wl_lower = np.reshape(wl_lower, (n_days, n_wl)) 
-    wl_upper = np.reshape(wl_upper, (n_days, n_wl))
-    
+
     return ssi, wl_lower
 
 
