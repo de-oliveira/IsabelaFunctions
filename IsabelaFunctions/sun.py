@@ -158,7 +158,7 @@ def compute_ff_grids(B_input, B_sat = 250., B_min = 60., half_number_of_steps = 
         The lower cut-off value for the magnetic field of the spots, in G. The default is 60.
     half_number_of_steps : integer, optional
         The total number of steps in the grid is equal to half_number_of_steps * 2 + 1. The default is 4.
-        
+    step_size = 5.   
     Returns
     -------
     3 grid arrays, containing the filling factors of the faculae, umbra, and penumbra, respectively.
