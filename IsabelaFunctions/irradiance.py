@@ -19,11 +19,16 @@ class SatireSSI:
     def __init__(self, file, n_days, start_year = 2010, start_month = 6, start_day = 17, wavelengths = [200., 900.]):
         ssi, wl_lower = sun.load_satire_ssi(file, n_days, start_year, start_month, start_day)
         
-        selected_ssi = np.zeros((len(wavelengths), ssi.shape[0]))
+        if len(wavelengths) > 1:
+            selected_ssi = np.zeros((len(wavelengths), ssi.shape[0]))
     
-        for w in range(len(wavelengths)):
-            selected_ssi[w] = ssi[:, np.where(wl_lower == wavelengths[w])[1][0]] 
-    
+            for w in range(len(wavelengths)):
+                selected_ssi[w] = ssi[:, np.where(wl_lower == wavelengths[w])[1][0]] 
+        
+        else:
+            selected_ssi = np.zeros((ssi.shape[0]))
+            selected_ssi = ssi[:, np.where(wl_lower == wavelengths)[1][0]] 
+            
         self.satire_ssi = selected_ssi
         
 

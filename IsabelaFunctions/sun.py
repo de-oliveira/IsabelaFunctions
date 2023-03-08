@@ -92,7 +92,7 @@ def compute_interpolations(flux, angles, number_of_wavelengths):
     return interpolation_function
 
 
-def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 700., ratio_umb = 0.2, ratio_pen = 0.8):
+def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 700.):
     """
     Calculation of filling factors of faculae and spots based on an input magnetic field map.
     
@@ -122,9 +122,9 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
     
     ff_spots[abs(B_input) >= max_spot] = 1.
     ff_spots[B_pixel] = (abs(B_input[B_pixel]) - min_spot) / (max_spot - min_spot)
-    
-    ff_umbra = ratio_umb * ff_spots
-    ff_penumbra = ratio_pen * ff_spots
+
+    ff_umbra = 0.2 * ff_spots
+    ff_penumbra = 0.8 * ff_spots
     
     ff_faculae = np.zeros_like(B_input)
     B_pixel = abs(B_input) < sat_fac
@@ -143,7 +143,7 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
     return ff_faculae, ff_umbra, ff_penumbra
 
 
-def compute_ff_grids(B_input, B_sat = 250., B_max = 700., half_number_of_steps = 4):
+def compute_ff_grids(B_input, B_sat = 250., B_min = 60., half_number_of_steps = 4, step_size = 5.):
     """
     Calculation of a grid of filling factors of faculae and spots based on an input magnetic field map.
     The grid will be centered on B_sat and B_max, with (half_number_of_steps * 2 + 1) steps.
@@ -154,8 +154,8 @@ def compute_ff_grids(B_input, B_sat = 250., B_max = 700., half_number_of_steps =
         The magnetic field at each pixel.
     B_sat : float, optional
         The saturation threshold for the magnetic field of the faculae, in G. The default is 250.
-    B_max : float, optional
-        The upper cut-off value for the magnetic field of the spots, in G. The default is 700.
+    B_min : float, optional
+        The lower cut-off value for the magnetic field of the spots, in G. The default is 60.
     half_number_of_steps : integer, optional
         The total number of steps in the grid is equal to half_number_of_steps * 2 + 1. The default is 4.
         
@@ -166,13 +166,11 @@ def compute_ff_grids(B_input, B_sat = 250., B_max = 700., half_number_of_steps =
     """
 
     nday, nlat, nlon = B_input.shape
-    
     length = half_number_of_steps * 2 + 1
-    step_size = 5.
     
     grid_B_sat = np.linspace(B_sat - half_number_of_steps * step_size, B_sat + half_number_of_steps * step_size, length)
-    grid_B_max = np.linspace(B_max - half_number_of_steps * step_size, B_max + half_number_of_steps * step_size, length)
-    
+    grid_B_min = np.linspace(B_min - half_number_of_steps * step_size, B_min + half_number_of_steps * step_size, length)
+
     ff_faculae = np.zeros((nday, nlat, nlon, length, length))
     ff_umbra = np.zeros_like(ff_faculae)
     ff_penumbra = np.zeros_like(ff_faculae)
@@ -181,7 +179,7 @@ def compute_ff_grids(B_input, B_sat = 250., B_max = 700., half_number_of_steps =
         for i in range(length):
             for j in range(length):
                 ff_faculae[day, :, :, i, j], ff_umbra[day, :, :, i, j], ff_penumbra[day, :, :, i, j] = \
-                    isa.sun.compute_filling_factors(B_input[day], grid_B_sat[i], grid_B_max[j])
+                    isa.sun.compute_filling_factors(B_input[day], grid_B_sat[i], grid_B_min[j], 700.)
 
     return ff_faculae, ff_umbra, ff_penumbra
 
