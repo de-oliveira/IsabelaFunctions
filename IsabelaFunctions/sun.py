@@ -3,7 +3,6 @@
 """
 
 import numpy as np
-from tqdm import tqdm
 import IsabelaFunctions as isa
 import scipy.interpolate as interp
 import scipy.integrate as integrate
@@ -264,7 +263,7 @@ def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
 
 
 def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
-                    interp_um, interp_penum, x_obs, y_obs):
+                    interp_um, interp_penum, x_obs, y_obs, grid = 1):
     """
     Calculation of irradiance from a full surface map of filling factors.
     Contribution by Sowmya Krishnamurthy.
@@ -297,8 +296,8 @@ def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, inte
 
     """
     
-    x = np.linspace(1., 360., 360)
-    y = np.linspace(-90., 90., 181)
+    x = np.linspace(1., 360., 360 * grid)
+    y = np.linspace(-90., 90., 181 * grid)
     x_pos, y_pos = np.meshgrid(x, y)
     
     delta_lambda = abs(x_pos - x_obs)
@@ -677,7 +676,7 @@ def irradiance_from_Br(B, ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_f
     mask_pen = np.zeros_like(B)
     vis = np.zeros_like(B)
     
-    for i in tqdm(range(nday)):
+    for i in range(nday):
         
         # Take the (~) central colatitude of the map y0, and calculate the index of the central longitude x0
         y0 = 1. * B[i][90] # <<<<<----- THIS IS WRONG!!
