@@ -91,7 +91,7 @@ def compute_interpolations(flux, angles, number_of_wavelengths):
     return interpolation_function
 
 
-def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 700.):
+def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 700., umbra = 0.2, penumbra = 0.8):
     """
     Calculation of filling factors of faculae and spots based on an input magnetic field map.
     
@@ -122,8 +122,8 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
     ff_spots[abs(B_input) >= max_spot] = 1.
     ff_spots[B_pixel] = (abs(B_input[B_pixel]) - min_spot) / (max_spot - min_spot)
 
-    ff_umbra = 0.2 * ff_spots
-    ff_penumbra = 0.8 * ff_spots
+    ff_umbra = umbra * ff_spots
+    ff_penumbra = penumbra * ff_spots
     
     ff_faculae = np.zeros_like(B_input)
     B_pixel = abs(B_input) < sat_fac
