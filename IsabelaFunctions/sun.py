@@ -106,9 +106,9 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
         The lower cut-off value for the magnetic field of the spots, in G. The default is 60.
     max_spots : float, optional
         The upper cut-off value for the magnetic field of the spots, in G. The default is 700.
-    ratio_umb : float, optional
+    umbra : float, optional
         The ratio of umbra in the spots, between 0 and 1. The default is 0.2.
-    ratio_pen : float, optional
+    penumbra : float, optional
         The ratio of penumbra in the spots, between 0 and 1. The default is 0.8.
 
     Returns

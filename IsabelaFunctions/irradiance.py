@@ -84,3 +84,46 @@ class Fluxes:
         self.umbra = sun.compute_interpolations(flux_umbra, angles, len(wavelengths))
         self.penumbra = sun.compute_interpolations(flux_penumbra, angles, len(wavelengths))
         self.wavelengths = wavelengths
+
+
+class ContinuumData:
+    
+    def __init__(self, path, n_days):
+     day0_file = pd.read_csv(path + 'UTC_time_starts_from_dot1_for_IC.txt', infer_datetime_format = True, names = ['dates'])
+     day0 = dt.strptime(day0_file.dates[0], '%Y.%m.%d_%H:%M:%S_TAI').date()
+     
+     days = []
+     for i in range(n_days):
+         days.append(day0 + td(days = i))
+     
+     data = np.empty((n_days, 181, 360))
+     for i in tqdm(range(n_days)):
+             data[i] = np.loadtxt(path + 'obs_ic/observed_ic.' + str(i+1))
+     
+     l0_b0_SDO = pd.read_csv(path + 'l0_b0_SDO.txt', delim_whitespace = True)
+
+     days_SDO = pd.to_datetime(l0_b0_SDO.T_REC, format = '%Y.%m.%d_%H:%M:%S_TAI')
+         
+     time_stamps = []    
+     for i in range(len(days)):
+             time_stamps.append(np.where(pd.Timestamp(days[i]) == days_SDO)[0][0])
+
+     l0 = l0_b0_SDO.CRLN_OBS[time_stamps]
+     b0 = l0_b0_SDO.CRLT_OBS[time_stamps]
+
+     l0 = np.array(l0)
+     b0 = np.array(b0)
+
+     # Substitute the nan for the mean between the lower and higher values
+     for i in range(len(l0)):
+         if np.isnan(l0[i]) == True:
+             l0[i] = np.nanmean(l0[i-1:i+2])
+
+         if np.isnan(b0[i]) == True:
+             b0[i] = np.nanmean(b0[i-1:i+2])
+     
+     self.continuum = data
+     self.l0 = l0
+     self.b0 = b0
+     self.days = days
+ 
