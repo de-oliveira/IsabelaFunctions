@@ -732,4 +732,112 @@ def irradiance_from_Br(B, ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_f
     
     return irradiance
 
+
+def limb_darkening_map(keys):
+    """
+    Creates a map for the limb darkening
+
+    Parameters
+    ----------
+    keys : TYPE
+        Metadata from DRMS.
+
+    Returns
+    -------
+    smap : array
+        Limb darkening map.
+
+    """
+    #  6 params from May 11 test run. 
+    LD_coeffs = [1.0, 0.429634631, 0.071182463, -0.02522375, -0.012669259, -0.001446241] 
+
+    u = np.sin(keys["maj_ax_ang"])
+    v = np.cos(keys["maj_ax_ang"])
+    xm = keys["xm"]
+    ym = keys["ym"]
+    maj_ax_proj = (u * xm + v * ym) / keys["sun_rad_maj"]
+    min_ax_proj = (v * xm - u * ym) / keys["sun_rad_min"]
+    rho2        = maj_ax_proj ** 2 + min_ax_proj ** 2
+
+    smap  = np.zeros(np.shape(rho2))
+
+    mu = np.sqrt(1.0 - rho2[rho2 < 1]) 
+    xi = np.log(mu)
+    zt = 1.0
+    ld = 1.0
+    
+    for ord in np.arange(1, 6):
+        zt *= xi
+        ld += LD_coeffs[ord] * zt
+    
+    smap[rho2 < 1] = 1. / ld 
+    
+    return smap
+
+def limb_darkening_correction(data_hmi, keys):
+    """
+    Corrects for the limb darkening of a continuum intensity map. Created by Dan Yang.
+
+    Parameters
+    ----------
+    data_hmi : array
+        Continuum intensity map.
+    keys : TYPE
+        Metadata from DRMS.
+
+    Returns
+    -------
+    data_corrected : array
+        The corrected data.
+
+    """
+    x0     = float(keys['CRPIX1'])
+    y0     = float(keys['CRPIX2'])
+    DSUN   = float(keys['DSUN_OBS'])
+    dx     = float(keys['CDELT1'])
+    
+    RSUN = 696e6
+
+    x_raw = (np.arange(np.shape(data_hmi)[0]) + 1 - x0) # + 1 due to wcs
+    y_raw = (np.arange(np.shape(data_hmi)[1]) + 1 - y0) # + 1 due to wcs
+
+    xm_raw, ym_raw               = np.meshgrid(x_raw, y_raw)
+    key_secant                   = {}
+    key_secant["xm"]             = xm_raw
+    key_secant["ym"]             = ym_raw
+    key_secant["rad_sun_angle"]  = np.arcsin(RSUN / DSUN)
+    key_secant["pix_sep_radian"] = np.deg2rad(dx) / 3600.
+    key_secant["sun_rad_maj"]    = key_secant["rad_sun_angle"] / key_secant["pix_sep_radian"] 
+    key_secant["sun_rad_min"]    = key_secant["sun_rad_maj"] 
+    key_secant["maj_ax_ang"]     = 0 # angle of major axis, here assume to be zero. 
+    key_secant["secant_thresh"]  = 4 
+    
+    #  6 params from May 11 test run. 
+    LD_coeffs = [1.0, 0.429634631, 0.071182463, -0.02522375, -0.012669259, -0.001446241] 
+
+    u = np.sin(key_secant["maj_ax_ang"])
+    v = np.cos(key_secant["maj_ax_ang"])
+    xm = key_secant["xm"]
+    ym = key_secant["ym"]
+    maj_ax_proj = (u * xm + v * ym) / key_secant["sun_rad_maj"]
+    min_ax_proj = (v * xm - u * ym) / key_secant["sun_rad_min"]
+    rho2        = maj_ax_proj ** 2 + min_ax_proj ** 2
+
+    smap  = np.zeros(np.shape(rho2))
+
+    mu = np.sqrt(1.0 - rho2[rho2 < 1]) 
+    xi = np.log(mu)
+    zt = 1.0
+    ld = 1.0
+    
+    for ord in np.arange(1, 6):
+        zt *= xi
+        ld += LD_coeffs[ord] * zt
+    
+    smap[rho2 < 1] = 1. / ld
+    
+    data_corrected = data_hmi * smap
+    
+    return data_corrected
+    
 ########################################################################################

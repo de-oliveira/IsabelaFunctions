@@ -34,7 +34,7 @@ class SatireSSI:
 
 class FarSideB:
     
-    def __init__(self, path, n_days):
+    def __init__(self, path, n_days, input_br = False):
         day0_file = pd.read_csv(path + 'UTC_time_starts_from_dot1.txt', infer_datetime_format = True, names = ['dates'])
         day0 = dt.strptime(day0_file.dates[0], '%Y.%m.%d_%H:%M:%S_TAI').date()
         
@@ -72,6 +72,12 @@ class FarSideB:
         self.l0 = l0
         self.b0 = b0
         self.days = days
+        
+        if input_br:
+            data = np.empty_like(magnetograms)
+            for i in tqdm(range(n_days)):
+                data[i] = np.loadtxt(path + 'input_br/input_br.' + str(i+1))
+            self.near_side = data
 
 
 class Fluxes:
