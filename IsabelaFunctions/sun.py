@@ -774,6 +774,7 @@ def limb_darkening_map(keys):
     
     return smap
 
+
 def limb_darkening_correction(data_hmi, keys):
     """
     Corrects for the limb darkening of a continuum intensity map. Created by Dan Yang.
@@ -821,9 +822,9 @@ def limb_darkening_correction(data_hmi, keys):
     ym = key_secant["ym"]
     maj_ax_proj = (u * xm + v * ym) / key_secant["sun_rad_maj"]
     min_ax_proj = (v * xm - u * ym) / key_secant["sun_rad_min"]
-    rho2        = maj_ax_proj ** 2 + min_ax_proj ** 2
+    rho2 = maj_ax_proj ** 2 + min_ax_proj ** 2
 
-    smap  = np.zeros(np.shape(rho2))
+    smap = np.zeros(np.shape(rho2))
 
     mu = np.sqrt(1.0 - rho2[rho2 < 1]) 
     xi = np.log(mu)
@@ -839,5 +840,43 @@ def limb_darkening_correction(data_hmi, keys):
     data_corrected = data_hmi * smap
     
     return data_corrected
+
+
+def degrade_image(data, new_res):
+    """
+    Decreases the resolution of the data by averaging.
+
+    Parameters
+    ----------
+    data : 2D array of shape (m, m)
+        The original data.
+        
+    new_res : int
+        The resolution desired for the image.
+
+    Returns
+    -------
+    new_data : TYPE
+        Degraded array with shape (new_res, new_res).
+
+    """
     
+    factor = np.shape(data)[0] // new_res
+    new_data = np.empty((new_res, new_res))
+
+    for rows in range(new_res):
+        i0 = rows * factor
+        i1 = i0 + factor
+        for cols in range(new_res):
+            j0 = cols * factor
+            j1 = j0 + factor
+            new_data[rows, cols] = np.nanmean(data[i0:i1, j0:j1])
+            
+    return new_data
+            
+            
+            
+            
+            
+            
 ########################################################################################

@@ -59,10 +59,6 @@ def residuals(x1, x2):
     return res, res_total
 
 
-def compute_L2_norm():
-    """ """
-    
-
 def gauss_function(x, off, a, x_mean, sigma):
     """ Equation for a Gaussian curve.
 
@@ -127,7 +123,7 @@ def linear_function(x, a, b):
         f: array
             The linear function.
     """
-    f = a+b*x
+    f = a + b*x
     return f
 
 
@@ -150,7 +146,7 @@ def linear_fit(x, y, y_error):
         perr: array
             One standard deviation errors on the parameters.
     """
-    popt, pcov = curve_fit(linear_function, x, y, sigma=y_error, absolute_sigma=True)
+    popt, pcov = curve_fit(linear_function, x, y, sigma = y_error, absolute_sigma = True)
     perr = np.sqrt(np.diag(pcov))
     return popt, pcov, perr
 
