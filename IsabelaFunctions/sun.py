@@ -10,6 +10,8 @@ import scipy.io as io
 import pandas as pd
 import julian
 from datetime import datetime as dt
+import subprocess as subp
+from scipy.interpolate import RegularGridInterpolator
 
 
 def read_filling_factors(file, cadence = 4):
@@ -803,6 +805,29 @@ def limb_darkening_correction(data_hmi, keys):
     return data_corrected
 
 
+def get_keys_from_drms(ds, keylist):
+    
+    knames = ','.join([nam for nam, typ in keylist])
+    p = subp.Popen('show_info ds=%s key=%s -q' % (ds, knames),
+                    shell=True, stdout=subp.PIPE, encoding='utf-8')
+    lines = [line.rstrip() for line in p.stdout.readlines()]
+    keys_str = np.array([line.split() for line in lines])
+    keys = {}
+    for i in range(keys_str.shape[0]):
+        line = keys_str[i]
+        keys[line[0]] = {}
+        for j in range(1, keys_str.shape[1]):
+            keys[line[0]][keylist[j][0]] = keylist[j][1](line[j])
+    return keys
+
+
+def get_paths_from_drms(ds):
+    p = subp.Popen('show_info ds=%s -Pq' % (ds), shell=True,
+                    stdout=subp.PIPE, encoding='utf-8')
+    paths = [line.strip() for line in p.stdout.readlines()]
+    return paths
+
+
 def degrade_image(data, new_res):
     """
     Decreases the resolution of the data by averaging.
@@ -821,23 +846,15 @@ def degrade_image(data, new_res):
         Degraded array with shape (new_res, new_res).
 
     """
-    
-    factor = np.shape(data)[0] // new_res
-    new_data = np.empty((new_res, new_res))
+            
+    m = data.shape[0]
+    y = np.linspace(0, 1.0/m, data.shape[0])
+    x = np.linspace(0, 1.0/m, data.shape[1])
+    interpolating_function = RegularGridInterpolator((y, x), data)
 
-    for rows in range(new_res):
-        i0 = rows * factor
-        i1 = i0 + factor
-        for cols in range(new_res):
-            j0 = cols * factor
-            j1 = j0 + factor
-            new_data[rows, cols] = np.nanmean(data[i0:i1, j0:j1])
-            
-    return new_data
-            
-            
-            
-            
+    yv, xv = np.meshgrid(np.linspace(0, 1.0/m, new_res), np.linspace(0, 1.0/m, new_res))
+
+    return interpolating_function((xv, yv))
             
             
 ########################################################################################
