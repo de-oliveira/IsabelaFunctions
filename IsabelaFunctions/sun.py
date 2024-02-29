@@ -123,6 +123,7 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
     
     ff_spots[abs(B_input) >= max_spot] = 1.
     ff_spots[B_pixel] = (abs(B_input[B_pixel]) - min_spot) / (max_spot - min_spot)
+    ff_spots[abs(B_input) < min_spot] = 0.
 
     ff_umbra = umbra * ff_spots
     ff_penumbra = penumbra * ff_spots
@@ -138,8 +139,11 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
     
     # Ignoring bins outside full-disc magnetogram
     ff_faculae[B_input == 0] = np.nan
+    ff_faculae[np.where(np.isnan(B_input))] = np.nan
     ff_umbra[B_input == 0] = np.nan
+    ff_umbra[np.where(np.isnan(B_input))] = np.nan
     ff_penumbra[B_input == 0] = np.nan
+    ff_penumbra[np.where(np.isnan(B_input))] = np.nan
 
     return ff_faculae, ff_umbra, ff_penumbra
 
