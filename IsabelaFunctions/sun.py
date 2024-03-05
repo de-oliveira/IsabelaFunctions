@@ -31,19 +31,22 @@ def read_filling_factors(file, cadence = 4):
 
     """
     loading_file = np.load(file, allow_pickle = True).item()
-    data = list(loading_file.items())
-    data = np.array(data)
-    
-    dates = data[:, 0]
-    
-    filling_factors = np.zeros((len(dates), 181, 360))
-    for i in range(len(filling_factors)):
-        filling_factors[i] = data[i][1]
-    
-    filling_factors = filling_factors[::cadence]
+    dates = list(loading_file.keys())
+    dates = np.array(dates)
     dates = dates[::cadence]
+
+    data = list(loading_file.values())
+    data = np.array(data)
+    data = data[::cadence]
     
-    return filling_factors, dates
+    # filling_factors = np.zeros((len(dates), 181, 360))
+    # for i in range(len(filling_factors)):
+    #     filling_factors[i] = data[i][1]
+    
+    # filling_factors = filling_factors[::cadence]
+    # dates = dates[::cadence]
+    
+    return data, dates
         
         
 def read_fluxes(file):
@@ -193,7 +196,13 @@ def compute_ff_grids(B_input, B_sat = 250., B_min = 60., half_number_of_steps = 
 
 def visible(y_obs, y_pos, delta_lambda):
     """
-    The cosine of the heliocentric angle (mu = cos(theta)).
+    The visible function calculates the cosine of the heliocentric angle (mu = cos(theta)), also known as the cosine of the angle between the observer (y_obs) and the position of the sun (y_pos) in the sky. The heliocentric angle is an important parameter in astronomy that determines the visibility of celestial objects.
+
+    The function takes three parameters:
+
+    y_obs: The observer's position in the sky, specified in degrees.
+    y_pos: The position of the sun in the sky, specified in degrees.
+    delta_lambda: The difference in longitude between the observer and the sun, specified in degrees.
     
     """
     return (np.sin(np.deg2rad(y_obs)) * np.sin(np.deg2rad(y_pos)) + \

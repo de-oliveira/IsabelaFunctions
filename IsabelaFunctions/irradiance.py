@@ -132,4 +132,32 @@ class ContinuumData:
      self.l0 = l0
      self.b0 = b0
      self.days = days
- 
+
+
+class FillingFactors:
+     
+     def __init__(self, data_mag, sat_fac = 250., min_spot = 60., max_spot = 700.):
+         ff_faculae = np.empty_like(data_mag)
+         ff_umbra = np.empty_like(data_mag)
+         ff_penumbra = np.empty_like(data_mag)
+
+         for i in range(data_mag.shape[0]):
+             ff_faculae[i], ff_umbra[i], ff_penumbra[i] = sun.compute_filling_factors(data_mag[i], sat_fac, min_spot, max_spot)
+
+         self.faculae = ff_faculae
+         self.umbra = ff_umbra
+         self.penumbra = ff_penumbra
+         self.spots = ff_umbra + ff_penumbra
+         
+
+class FillingFactorsFromFile:
+     
+        def __init__(self, file_faculae, file_umbra, file_penumbra):
+            ff_faculae = np.load(file_faculae)
+            ff_umbra = np.load(file_umbra)
+            ff_penumbra = np.load(file_penumbra)
+    
+            self.faculae = ff_faculae
+            self.umbra = ff_umbra
+            self.penumbra = ff_penumbra
+            self.spots = ff_umbra + ff_penumbra
