@@ -74,7 +74,7 @@ def read_fluxes(file):
     flux_umbra = 1.* flux['intens_um']
     flux_penumbra = 1.* flux['intens_pen']
 
-    # Convert fluxes to physical units
+    # Convert fluxes to physical units (W/m**2/nm)
     solar_radius_AU = 0.00465047
     pixel_size_at_equator = 2 * np.pi * solar_radius_AU / 360.
     solid_angle_pixel = pixel_size_at_equator**2
@@ -868,6 +868,42 @@ def degrade_image(data, new_res):
     yv, xv = np.meshgrid(np.linspace(0, 1.0/m, new_res), np.linspace(0, 1.0/m, new_res))
 
     return interpolating_function((xv, yv))
-            
-            
+
+           
+def create_map_mu_for_solar_disc(n_pixels, radius):
+    """
+    Creates a map of mu values (mu = cosine(heliocentric angle)) for a solar disc, with 11 concentric rings.
+
+    Parameters
+    ----------
+    n_pixels : int
+        The number of pixels in one row in the map. The map will have n_pixels x n_pixels pixels.
+    radius : float
+        The radius of the solar disc, in pixels.
+
+    Returns
+    -------
+    mu_map : 2D array
+        The map of mu values.
+
+    """
+    x0 = n_pixels // 2
+    y0 = n_pixels // 2
+
+    mu = [1, .95, .85, .75, .65, .55, .45, .35, .25, .15, .075, 0.0]
+    mu_inverted = mu[::-1]
+    full_disc = np.zeros((n_pixels, n_pixels))
+
+    for i in range(len(mu)):
+        r = mu[i] * radius
+        [X, Y] = np.mgrid[0:n_pixels, 0:n_pixels]
+        xpr = X - x0
+        ypr = Y - y0
+
+        reconstruction_circle = (xpr ** 2 + ypr ** 2) <= r ** 2
+        full_disc[reconstruction_circle] = mu_inverted[i]
+    
+    return full_disc
+
+
 ########################################################################################
