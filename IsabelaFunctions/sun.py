@@ -100,7 +100,7 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
     """
     Calculation of filling factors of faculae and spots based on an input magnetic field map.
     
-    
+
     Parameters
     ----------
     B_input : 2D-array
