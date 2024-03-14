@@ -1,9 +1,90 @@
 """
-Computes different types of statistis, means, fits/regression for the data.
+Computes different types of statistics, means, fits/regression for the data.
 """
 
 import numpy as np
 from scipy.optimize import curve_fit
+from numpy.fft import fft2, ifft2
+from scipy.ndimage import gaussian_filter
+
+
+def make_gaussian_kernel_2D(sigma, truncate):
+    """ Creates a 2D Gaussian kernel to be used as a point spread function (psf).
+        The sum of the psf is approximately 1. 
+        The radius of the Gaussian kernel is round(truncate * sigma).
+        The shape of the kernel is (2*radius + 1, 2*radius + 1).
+
+    Parameters:
+        sigma: float
+            The standard deviation of the Gaussian.
+        truncate: float
+            The truncation of the Gaussian.
+
+    Returns:
+        psf: 2D-array
+            The 2D Gaussian kernel.
+    """
+    radius = round(truncate * sigma)
+    perfect_psf = np.zeros((2*radius + 1, 2*radius + 1))
+    perfect_psf[radius, radius] = 1
+    psf = gaussian_filter(perfect_psf, sigma = sigma, mode = 'constant', cval = 0, truncate = truncate)
+    return psf
+
+
+def convolve_image(image, psf):
+    """ Convolves the image with the psf.
+        The image should not contain NaNs.
+
+    Parameters:
+        image: 2D-array
+            The image to be convolved.
+        psf: array
+            The point spread function.
+
+    Returns:
+        convolved_image: 2D-array
+            The convolved image.
+    """
+    image_shape = np.array(image.shape)
+    psf_shape = np.array(psf.shape)
+    z_shape = image_shape + psf_shape - 1
+
+    image_fft = fft2(image, z_shape)
+    psf_fft = fft2(psf, z_shape)
+
+    convolved_image_fft = image_fft * psf_fft
+    convolved_image = ifft2(convolved_image_fft).real
+    return convolved_image
+
+
+def deconvolve_image(image, psf):
+    """ Deconvolves an image using the psf.
+        The image should not contain NaNs.
+
+    Parameters:
+        image: 2D-array
+            The image to be deconvolved.
+        psf: array
+            The point spread function.
+
+    Returns:
+        deconvolved_image: 2D-array
+            The deconvolved image.
+    """
+    image_shape = np.array(image.shape)
+    psf_shape = np.array(psf.shape)
+    new_shape = image_shape + psf_shape - 1
+
+    image_fft = fft2(image, new_shape)
+    psf_fft = fft2(psf, new_shape)
+
+    deconvolved_image_fft = image_fft / psf_fft
+    deconvolved_image = ifft2(deconvolved_image_fft).real
+
+    cut = (deconvolved_image.shape[0] - image.shape[0]) // 2
+    deconvolved_image_back_to_old_shape = deconvolved_image[cut:-cut, cut:-cut]
+
+    return deconvolved_image_back_to_old_shape
 
 
 def moving_average(a, nday, norm = True):
