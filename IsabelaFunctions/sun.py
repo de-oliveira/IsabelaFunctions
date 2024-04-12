@@ -843,7 +843,7 @@ def get_paths_from_drms(ds):
 
 def degrade_image(data, new_res):
     """
-    Decreases the resolution of the data by averaging.
+    Decreases (or increases) the resolution of the data by using scipy.interpolate.RegularGridInterpolator.
 
     Parameters
     ----------
