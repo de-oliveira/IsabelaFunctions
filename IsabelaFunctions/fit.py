@@ -31,6 +31,28 @@ def make_gaussian_kernel_2D(sigma, truncate):
     return psf
 
 
+def make_gaussian_laplace_2D(sigma, truncate):
+    """ Creates a 2D Gaussian Laplace kernel to be used as a point spread function (psf).
+        The sum of the psf is approximately 1. 
+        The radius of the Gaussian kernel is round(truncate * sigma).
+        The shape of the kernel is (2*radius + 1, 2*radius + 1).
+
+    Parameters:
+        sigma: float
+            The standard deviation of the Gaussian.
+
+    Returns:
+        psf: 2D-array
+            The 2D Gaussian Laplace kernel.
+    """
+    radius = round(truncate * sigma)
+    x = np.arange(-radius, radius + 1)
+    y = np.arange(-radius, radius + 1)
+    x, y = np.meshgrid(x, y)
+    psf = -1/(np.pi * sigma**4) * (1 - (x**2 + y**2)/(2*sigma**2)) * np.exp(-(x**2 + y**2)/(2*sigma**2))
+    return psf
+
+
 def convolve_image(image, psf):
     """ Convolves the image with the psf.
         The image should not contain NaNs.
