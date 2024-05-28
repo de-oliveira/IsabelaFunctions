@@ -76,6 +76,9 @@ def convolve_image(image, psf):
 
     convolved_image_fft = image_fft * psf_fft
     convolved_image = ifft2(convolved_image_fft).real
+
+    cut = (convolved_image.shape[0] - image.shape[0]) // 2
+    convolved_image = convolved_image[cut:-cut, cut:-cut]
     return convolved_image
 
 
