@@ -869,9 +869,9 @@ def degrade_image(data, new_res):
     return interpolating_function((xv, yv))
 
            
-def create_map_mu_for_solar_disc(n_pixels, radius):
+def create_map_mu_for_solar_disc(n_pixels, radius, n_rings = 101):
     """
-    Creates a map of mu values (mu = cosine(heliocentric angle)) for a solar disc, with 11 concentric rings.
+    Creates a map of mu values (mu = cosine(heliocentric angle)) for a solar disc, with 101 concentric rings.
 
     Parameters
     ----------
@@ -879,6 +879,8 @@ def create_map_mu_for_solar_disc(n_pixels, radius):
         The number of pixels in one row in the map. The map will have n_pixels x n_pixels pixels.
     radius : float
         The radius of the solar disc, in pixels.
+    n_rings : int, optional
+        The number of rings in the map. The default is 101.
 
     Returns
     -------
@@ -889,7 +891,8 @@ def create_map_mu_for_solar_disc(n_pixels, radius):
     x0 = n_pixels // 2
     y0 = n_pixels // 2
 
-    mu = [1, .95, .85, .75, .65, .55, .45, .35, .25, .15, .075, 0.0]
+    #mu = [1, .95, .85, .75, .65, .55, .45, .35, .25, .15, .075, 0.0]
+    mu = np.linspace(1, 0, n_rings)
     mu_inverted = mu[::-1]
     full_disc = np.zeros((n_pixels, n_pixels))
 
@@ -903,6 +906,34 @@ def create_map_mu_for_solar_disc(n_pixels, radius):
         full_disc[reconstruction_circle] = mu_inverted[i]
     
     return full_disc
+
+
+def convert_Blos_to_Br(Blos, resolution):
+    """
+    Converts a map of the magnetic field strength in the line of sight to a map of the radial magnetic field, by dividing it by the cosine of the heliocentric angle.
+
+    Parameters
+    ----------
+    Blos : 2D array
+        The magnetic field strength in the line of sight.
+    resolution : int
+        The resolution of the map.
+
+    Returns
+    -------
+    Br : 2D array
+        The approximate radial magnetic field.
+
+    """
+    radius = int(resolution / 2)
+    mu = create_map_mu_for_solar_disc(resolution, radius)
+    br = 1.0 * Blos
+
+    # Dividing by mu to convert Blos to Br (only where mu is not zero)
+    non_zero = np.where(mu.flat)
+    br.flat[non_zero] /= mu.flat[non_zero]
+
+    return br
 
 
 ########################################################################################
