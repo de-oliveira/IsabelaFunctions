@@ -49,7 +49,7 @@ def read_filling_factors(file, cadence = 4):
     return data, dates
         
         
-def read_fluxes(file):
+def read_fluxes(file, full_surface = True):
     """
     Function to read the fluxes and its parameters and to return them converted to physical units.
 
@@ -74,15 +74,16 @@ def read_fluxes(file):
     flux_umbra = 1.* flux['intens_um']
     flux_penumbra = 1.* flux['intens_pen']
 
-    # Convert fluxes to physical units (W/m**2/nm)
-    solar_radius_AU = 0.00465047
-    pixel_size_at_equator = 2 * np.pi * solar_radius_AU / 360.
-    solid_angle_pixel = pixel_size_at_equator**2
+    if full_surface:
+        # Convert to physical units (W/m**2/nm)
+        solar_radius_AU = 0.00465047
+        pixel_size_at_equator = 2 * np.pi * solar_radius_AU / 360.
+        solid_angle_pixel = pixel_size_at_equator**2
 
-    flux_quiet *= solid_angle_pixel
-    flux_faculae *= solid_angle_pixel
-    flux_umbra *= solid_angle_pixel
-    flux_penumbra *= solid_angle_pixel
+        flux_quiet *= solid_angle_pixel
+        flux_faculae *= solid_angle_pixel
+        flux_umbra *= solid_angle_pixel
+        flux_penumbra *= solid_angle_pixel
 
     return wavelengths_nm, angles, flux_quiet, flux_faculae, flux_umbra, flux_penumbra
     
@@ -279,7 +280,7 @@ def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
 def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
                     interp_um, interp_penum, x_obs, y_obs, grid = 1):
     """
-    Calculation of irradiance from a full surface map of filling factors.
+    Calculation of irradiance from a full surface map of filling factors. Considers that the fluxes are already in physical units (see read_fluxes function).
     Contribution by Sowmya Krishnamurthy.
 
 
@@ -303,13 +304,14 @@ def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, inte
         The longitude of the observer.
     y_obs : float
         The latitude of the observer.
+    grid : int, optional
+        The grid size for the calculation. The default is 1.
 
     Returns
     -------
     irradiance : float
 
     """
-    
     x = np.linspace(1., 360., 360 * grid)
     y = np.linspace(-90., 90., 181 * grid)
     x_pos, y_pos = np.meshgrid(x, y)
@@ -334,6 +336,63 @@ def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, inte
 
     return irradiance
     
+
+def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, interp_um, interp_penum, mu_map, RSUN_OBS = 975., CDELT1 = 0.5):
+    """
+    Calculation of irradiance from a disc map of filling factors.
+
+    Parameters
+    ----------
+
+    ff_faculae : 2D array
+        Filling factors of the faculae of shape (lat,lon).
+    ff_umbra : 2D array
+        Filling factors of the umbra of shape (lat,lon).
+    ff_penumbra : 2D array
+        Filling factors of the penumbra of shape (lat,lon).
+    interp_qs : function
+        Interpolation function (flux) for the quiet Sun.
+    interp_fac : function
+        Interpolation function (flux) for the faculae.
+    interp_um : function
+        Interpolation function (flux) for the umbra.
+    interp_penum : function
+        Interpolation function (flux) for the penumbra.
+    mu_map : 2D array
+        The map of the cosine of the heliocentric angle (mu = cos(theta)). Can be created by create_map_mu_for_solar_disc.
+    RSUN_OBS : float
+        The angular radius of the Sun in arc-sec. The default is 975.
+    CDELT1 : float
+        Physical increment per index value in the x direction. The default is 0.5.
+    
+    Returns
+    -------
+
+    irradiance : float
+
+    """
+    # Convert fluxes to physical units (W/m**2/nm)
+    size = mu_map.shape[0]
+    solar_radius_AU = 0.00465047 # Solar radius in AU
+    n_pixel_solar_diameter_4096 = RSUN_OBS / CDELT1 # Original number of pixels
+    n_pixel_solar_diameter = size * n_pixel_solar_diameter_4096 / 4096 # Number of pixels for different map sizes
+    pixel_size_at_equator = solar_radius_AU / n_pixel_solar_diameter
+    solid_angle_pixel = pixel_size_at_equator**2
+
+    # Filling factors multiplied with solid angle of the pixel
+    mask_fac = mu_map * ff_faculae
+    mask_umb = mu_map * ff_umbra
+    mask_pen = mu_map * ff_penumbra
+    
+    # Calculation of irradiance
+    irr_qs = np.nansum(mu_map * interp_qs(mu_map) * solid_angle_pixel)              
+    delta_fac = np.nansum(mask_fac * (interp_fac(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
+    delta_umb = np.nansum(mask_umb * (interp_um(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
+    delta_pen = np.nansum(mask_pen * (interp_penum(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
+
+    irradiance = irr_qs + delta_fac + delta_umb + delta_pen
+    return irradiance
+
 
 def compute_s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_fach,
             interp_fack, interp_facr, interp_facv, x_obs, y_obs):
@@ -583,7 +642,7 @@ def compute_flux_map(flux_quiet, flux_faculae, flux_umbra, flux_penumbra, x_obs)
     # See Methods in Nèmec et al. 2020
     # theta = arccos(mu)
     # omega = (theta_up - theta_low) * omega_sun
-    omega = [6.6296969e-06, 1.2239433e-05, 1.0879501e-05 , 9.5195652e-06  , 8.1596210e-06, \
+    omega = [6.6296969e-05, 1.2239433e-05, 1.0879501e-05 , 9.5195652e-06  , 8.1596210e-06, \
              6.7996889e-06, 5.4397487e-06, 4.0798125e-06, 2.7198764e-06, 1.1474451e-06, 3.8248306e-07]
 
     # Defining the grid
@@ -869,32 +928,30 @@ def degrade_image(data, new_res):
     return interpolating_function((xv, yv))
 
            
-def create_map_mu_for_solar_disc(n_pixels, radius, n_rings = 101):
+def create_map_mu_for_solar_disc(n_pixels, radius):
     """
-    Creates a map of mu values (mu = cosine(heliocentric angle)) for a solar disc, with 101 concentric rings.
+    Creates a map of mu values (mu = cosine(heliocentric angle)) for a solar disc.
 
     Parameters
     ----------
     n_pixels : int
-        The number of pixels in one row in the map. The map will have n_pixels x n_pixels pixels.
+        The desired number of pixels in one row in the map.
     radius : float
         The radius of the solar disc, in pixels.
-    n_rings : int, optional
-        The number of rings in the map. The default is 101.
 
     Returns
     -------
     mu_map : 2D array
-        The map of mu values.
+        The map of mu values, with size n_pixels x n_pixels.
 
     """
     x0 = n_pixels // 2
     y0 = n_pixels // 2
 
     #mu = [1, .95, .85, .75, .65, .55, .45, .35, .25, .15, .075, 0.0]
-    mu = np.linspace(1, 0, n_rings)
+    mu = np.linspace(1, 0, 101)
     mu_inverted = mu[::-1]
-    full_disc = np.zeros((n_pixels, n_pixels))
+    mu_map = np.zeros((n_pixels, n_pixels))
 
     for i in range(len(mu)):
         r = mu[i] * radius
@@ -903,9 +960,9 @@ def create_map_mu_for_solar_disc(n_pixels, radius, n_rings = 101):
         ypr = Y - y0
 
         reconstruction_circle = (xpr ** 2 + ypr ** 2) <= r ** 2
-        full_disc[reconstruction_circle] = mu_inverted[i]
+        mu_map[reconstruction_circle] = mu_inverted[i]
     
-    return full_disc
+    return mu_map
 
 
 def convert_Blos_to_Br(Blos, resolution):

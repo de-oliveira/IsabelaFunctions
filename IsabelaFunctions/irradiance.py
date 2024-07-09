@@ -82,8 +82,8 @@ class FarSideB:
 
 class Fluxes:
     
-    def __init__(self, file):
-        wavelengths, angles, flux_quiet, flux_faculae, flux_umbra, flux_penumbra = sun.read_fluxes(file)
+    def __init__(self, file, full_surface = False):
+        wavelengths, angles, flux_quiet, flux_faculae, flux_umbra, flux_penumbra = sun.read_fluxes(file, full_surface)
         
         self.quiet_sun = sun.compute_interpolations(flux_quiet, angles, len(wavelengths))
         self.faculae = sun.compute_interpolations(flux_faculae, angles, len(wavelengths))
