@@ -151,49 +151,6 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
     return ff_faculae, ff_umbra, ff_penumbra
 
 
-def compute_ff_grids(B_input, B_sat = 250., B_min = 60., half_number_of_steps = 4, step_size = 5.):
-    """
-    Calculation of a grid of filling factors of faculae and spots based on an input magnetic field map.
-    The grid will be centered on B_sat and B_max, with (half_number_of_steps * 2 + 1) steps.
-
-    Parameters
-    ----------
-    B_input : 2D-array
-        The magnetic field at each pixel.
-    B_sat : float, optional
-        The saturation threshold for the magnetic field of the faculae, in G. The default is 250.
-    B_min : float, optional
-        The lower cut-off value for the magnetic field of the spots, in G. The default is 60.
-    half_number_of_steps : integer, optional
-        The total number of steps in the grid is equal to half_number_of_steps * 2 + 1. The default is 4.
-    step_size : float, optional
-        The step size of the grid. The default is 5.0 G.
-    
-    Returns
-    -------
-    3 grid arrays, containing the filling factors of the faculae, umbra, and penumbra, respectively.
-
-    """
-
-    nday, nlat, nlon = B_input.shape
-    length = half_number_of_steps * 2 + 1
-    
-    grid_B_sat = np.linspace(B_sat - half_number_of_steps * step_size, B_sat + half_number_of_steps * step_size, length)
-    grid_B_min = np.linspace(B_min - half_number_of_steps * step_size, B_min + half_number_of_steps * step_size, length)
-
-    ff_faculae = np.zeros((nday, nlat, nlon, length, length))
-    ff_umbra = np.zeros_like(ff_faculae)
-    ff_penumbra = np.zeros_like(ff_faculae)
-        
-    for day in range(nday):
-        for i in range(length):
-            for j in range(length):
-                ff_faculae[day, :, :, i, j], ff_umbra[day, :, :, i, j], ff_penumbra[day, :, :, i, j] = \
-                    isa.sun.compute_filling_factors(B_input[day], grid_B_sat[i], grid_B_min[j], 700.)
-
-    return ff_faculae, ff_umbra, ff_penumbra
-
-
 def visible(y_obs, y_pos, delta_lambda):
     """
     The visible function calculates the cosine of the heliocentric angle (mu = cos(theta)), also known as the cosine of the angle between the observer (y_obs) and the position of the sun (y_pos) in the sky. The heliocentric angle is an important parameter in astronomy that determines the visibility of celestial objects.
@@ -207,74 +164,6 @@ def visible(y_obs, y_pos, delta_lambda):
     """
     return (np.sin(np.deg2rad(y_obs)) * np.sin(np.deg2rad(y_pos)) + \
                  np.cos(np.deg2rad(y_obs)) * np.cos(np.deg2rad(y_pos)) * np.cos(np.deg2rad(delta_lambda)))
-
-
-def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
-                    interp_um, interp_penum, x_obs, y_obs):
-    """
-    Calculation of irradiance from a full surface map of filling factors.
-    Contribution by Sowmya Krishnamurthy.
-
-    Parameters
-    ----------
-    ff_fac : 3D array
-        Filling factors of the faculae, in the shape (nday, nlat, nlon).
-    ff_umbra : 3D array
-        Filling factors of the umbra, same shape as ff_fac.
-    ff_penumbra : 3D array
-        Filling factors of the penumbra, same shape as ff_fac.
-    interp_qs : function
-        Interpolation function (flux) for the quiet Sun.
-    interp_fac : function
-        Interpolation function (flux) for the faculae.
-    interp_um : function
-        Interpolation function (flux) for the umbra.
-    interp_penum : function
-        Interpolation function (flux) for the penumbra.
-    x_obs : float
-        The longitude of the observer.
-    y_obs : float
-        The latitude of the observer.
-
-    Returns
-    -------
-    An array of len(nday).
-
-    """
-    nday, nlat, nlon = ff_faculae.shape
-    days = np.linspace(0, nday-1, nday)
-    irradiance = np.zeros(nday)
-    
-    x = np.linspace(1., 360., nlon)
-    y = np.linspace(-90., 90., nlat)
-    x_pos, y_pos = np.meshgrid(x, y)
-    
-    delta_lambda = abs(x_pos - x_obs)
-    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
-    vis[vis < 0.] = 0.                          # an observer will see only half of the sphere
-    vis_corr = vis * np.cos(np.deg2rad(y_pos))  # solid angle of each pixel in the visible disk
-
-    for i in range(nday):  
-
-        # Rotation by 13.38 degrees per day
-        lonshift = 13.38 * days[i]
-
-        # Rotated filling factors multiplied with solid angle of the pixel
-        mask_fac = vis_corr * isa.mapsetup.shift_map_longitude(ff_faculae[i], lonshift)
-        mask_umb = vis_corr * isa.mapsetup.shift_map_longitude(ff_umbra[i], lonshift)
-        mask_pen = vis_corr * isa.mapsetup.shift_map_longitude(ff_penumbra[i], lonshift)
-        
-        # Calculation of irradiance
-        irr_qs = np.nansum(vis_corr * interp_qs(vis))              
-        delta_fac = np.nansum(mask_fac * (interp_fac(vis) - interp_qs(vis)))
-        delta_umb = np.nansum(mask_umb * (interp_um(vis) - interp_qs(vis)))
-        delta_pen = np.nansum(mask_pen * (interp_penum(vis) - interp_qs(vis)))        
-
-        irradiance[i] = irr_qs + delta_fac + delta_umb + delta_pen
-
-    irradiance[irradiance == 0.] = np.nan
-    
-    return irradiance
 
 
 def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
@@ -337,7 +226,7 @@ def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, inte
     return irradiance
     
 
-def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, interp_um, interp_penum, mu_map, RSUN_OBS = 975., CDELT1 = 0.5):
+def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, interp_um, interp_penum, mu_map, RSUN_OBS, CDELT1, DSUN_ORBS):
     """
     Calculation of irradiance from a disc map of filling factors.
 
@@ -361,9 +250,11 @@ def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, i
     mu_map : 2D array
         The map of the cosine of the heliocentric angle (mu = cos(theta)). Can be created by create_map_mu_for_solar_disc.
     RSUN_OBS : float
-        The angular radius of the Sun in arc-sec. The default is 975.
+        The angular radius of the Sun in arc-sec.
     CDELT1 : float
-        Physical increment per index value in the x direction. The default is 0.5.
+        Physical increment per index value in the x direction.
+    DSUN_ORBS : float
+        The distance between the observer and the Sun in meters.
     
     Returns
     -------
@@ -371,26 +262,21 @@ def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, i
     irradiance : float
 
     """
-    # Convert fluxes to physical units (W/m**2/nm)
-    size = mu_map.shape[0]
-    solar_radius_AU = 0.00465047 # Solar radius in AU
-    n_pixel_solar_diameter_4096 = RSUN_OBS / CDELT1 # Original number of pixels
-    n_pixel_solar_diameter = size * n_pixel_solar_diameter_4096 / 4096 # Number of pixels for different map sizes
-    pixel_size_at_equator = solar_radius_AU / n_pixel_solar_diameter
+    # Conversion to physical units
+    solar_radius_pixels = RSUN_OBS / CDELT1
+    solar_radius_AU = 0.00465047
+    pixel_size_at_equator = solar_radius_AU / solar_radius_pixels
     solid_angle_pixel = pixel_size_at_equator**2
-
-    # Filling factors multiplied with solid angle of the pixel
-    mask_fac = mu_map * ff_faculae
-    mask_umb = mu_map * ff_umbra
-    mask_pen = mu_map * ff_penumbra
+    AU = 1.496e11
     
     # Calculation of irradiance
     irr_qs = np.nansum(mu_map * interp_qs(mu_map) * solid_angle_pixel)              
-    delta_fac = np.nansum(mask_fac * (interp_fac(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
-    delta_umb = np.nansum(mask_umb * (interp_um(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
-    delta_pen = np.nansum(mask_pen * (interp_penum(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
+    delta_fac = np.nansum(ff_faculae * (interp_fac(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
+    delta_umb = np.nansum(ff_umbra * (interp_um(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
+    delta_pen = np.nansum(ff_penumbra * (interp_penum(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
 
     irradiance = irr_qs + delta_fac + delta_umb + delta_pen
+    irradiance /= DSUN_ORBS**2 / AU**2
     return irradiance
 
 
@@ -548,140 +434,9 @@ def load_satire_ssi(file, n_days, start_year = 2010, start_month = 6, start_day 
     return ssi, wl_lower
 
 
-def compute_irradiance_virgo(wavelengths, irradiance):
-    """ Contribution by Nina Nèmec
-        Calculation of irradiances within the VIRGO/SPM channels (blue, green and red).
-    
-   Parameters:
-        wavelengths: array
-            The array containing the wavelengths.
-        irradiance: array
-            The array containing the irradiance. Must have the same size as wavelengths.
-                    
-    Returns:
-        The irradiances in all three VIRGO channels: blue, green and red, respectively.
-    """
-
-    # Make Gaussian functions for the different VIRGO channels
-    # Blue channel
-    b = 402                 # central wavelength
-    a = 0.437               # maximum of transmissivity at central wavelength
-    fwhm = 5                # full width half maximum (nm)
-    sigma = fwhm /2.3548
-    
-    x_b = np.linspace(380, 420, num = 300)
-    y_b = a*np.exp(-(x_b-b)**2./(2*sigma**2.)) # Gaussian function with 'a' being the maximum
-    
-    # Green channel
-    b = 500
-    a = 0.417
-    fwhm = 5 
-    sigma = fwhm /2.3548
-    
-    x_g = np.linspace(480, 520, num = 300)
-    y_g = a*np.exp(-(x_g-b)**2./(2*sigma**2.))
-    
-    # Red channel
-    b = 802
-    a = 0.843
-    fwhm = 5 
-    sigma = fwhm /2.3548
-    
-    x_r = np.linspace(780, 820, num = 300)
-    y_r = a*np.exp(-(x_r-b)**2./(2*sigma**2.))
-    
-    # Create interpolation function
-    f = interp.interp1d(wavelengths, irradiance)
-    
-    blue_new = f(x_b)
-    green_new = f(x_g)
-    red_new = f(x_r)
-
-    # Multiply irradiance with filter
-
-    blue = blue_new * y_b
-    green = green_new * y_g
-    red = red_new * y_r
-    
-    # Integrate
-    
-    irr_blue = integrate.trapz(blue, x_b)
-    irr_green = integrate.trapz(green, x_g)
-    irr_red = integrate.trapz(red, x_r)
-    
-    return irr_blue, irr_green, irr_red
-
-
-def compute_flux_map(flux_quiet, flux_faculae, flux_umbra, flux_penumbra, x_obs):
-    """
-    NOT USED.
-    Computes the general irradiance of faculae and sunspots in a 11-rings circle, 
-    corrected for the corresponding solid angles of the pixels.
-
-    Parameters
-    ----------
-    flux_quiet : 1D array of length n-1.
-        Flux of the quiet Sun per ring.
-    flux_faculae : 1D array of length n-1.
-        Flux of the faculae per ring.
-    flux_umbra : 1D array of length n-1.
-        Flux of the umbra per ring.
-    flux_penumbra : 1D array of length n-1.
-        Flux of the penumbra per ring.
- 
-    Returns
-    -------
-    Flux maps of the quiet Sun, faculae, umbra, and penumbra, respectively.
-
-    """
-    # Defining the solid angles
-    mu = [1, .95, .85, .75, .65, .55, .45, .35, .25, .15, .075, 0.0]    # The borders of the rings
-    
-    omega_sun = 6.7996873e-5            # This is used to scale it to 1 AU
-    
-    # See Methods in Nèmec et al. 2020
-    # theta = arccos(mu)
-    # omega = (theta_up - theta_low) * omega_sun
-    omega = [6.6296969e-05, 1.2239433e-05, 1.0879501e-05 , 9.5195652e-06  , 8.1596210e-06, \
-             6.7996889e-06, 5.4397487e-06, 4.0798125e-06, 2.7198764e-06, 1.1474451e-06, 3.8248306e-07]
-
-    # Defining the grid
-    x = np.linspace(1., 360., 360)
-    y = np.linspace(-90., 90., 181)
-    x_pos, y_pos = np.meshgrid(x, y)    
-
-    delta_lambda = abs(x_pos - x_obs)
-    vis = visible(0., y_pos, delta_lambda)
-    vis[vis < 0.] = 0.
-
-    # Calculating the irradiance of quiet sun, faculae and sunspots
-    flux_qs_conv = 1. * vis
-    flux_faculae_conv = 1. * vis
-    flux_umbra_conv = 1. * vis
-    flux_penumbra_conv = 1. * vis
-    
-    for i in range(len(mu) - 1):
-        upp = mu[i]
-        low = mu[i+1]
-        my_range = np.logical_and(vis <= upp, vis > low)
-        
-        flux_qs_conv[my_range] = flux_quiet[i]
-        flux_faculae_conv[my_range] = flux_faculae[i]
-        flux_umbra_conv[my_range] = flux_umbra[i]
-        flux_penumbra_conv[my_range] = flux_penumbra[i]
-    
-    # Defining the contrast
-    quiet_sun = np.sum(flux_quiet * omega)
-    delta_faculae = (flux_faculae_conv - flux_qs_conv) * omega_sun
-    delta_umbra = (flux_umbra_conv - flux_qs_conv) * omega_sun
-    delta_penumbra = (flux_penumbra_conv - flux_qs_conv) * omega_sun
-    
-    return quiet_sun, delta_faculae, delta_umbra, delta_penumbra
-
-
 def angle_to_period(angle):
     """ Converts an angle within the ecliptic to its correspondent day in the past
-    and in the future. Used in the irradiance extrapolation method (Thiemann et al., 2017).
+    and in the future. Used in the irradiance interpolation method (Thiemann et al., 2017).
     
    Parameters:
         angle: float
@@ -694,116 +449,6 @@ def angle_to_period(angle):
     t2 = 27.27 - t1
     
     return t1, t2
-
-
-def irradiance_from_Br(B, ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, \
-                    interp_um, interp_penum, x_obs = None, y_obs = None):
-    """
-    Calculation of solar spectral irradiance for 1 wavelength, for multiple days, from a filling factors map.
-    Only works for a map of the visible disk. For a full surface map, use irradiance_full_surface below.
-    
-    Parameters
-    ----------
-    B : 3D-array
-        The magnetic field at each pixel. Must be in the shape (ndays, nlat, nlon).
-    ff_fac : 3D array
-        Filling factors of the faculae, same shape as B.
-    ff_umbra : 3D array
-        Filling factors of the umbra, same shape as B.
-    ff_penumbra : 3D array
-        Filling factors of the penumbra, same shape as B.
-    interp_qs : function
-        Interpolation function (flux) for the quiet Sun.
-    interp_fac : function
-        Interpolation function (flux) for the faculae.
-    interp_um : function
-        Interpolation function (flux) for the umbra.
-    interp_penum : function
-        Interpolation function (flux) for the penumbra.
-    x_obs : float, optional
-        The longitude of the observer. The default is 0.
-    y_obs : float, optional
-        The latitude of the observer. The default is 0.
-
-    Returns
-    -------
-    An array with length (nday).
-  
-    """
-    nday, nlat, nlon = B.shape
-    
-    if x_obs is None:
-        x_obs = np.zeros(nday)
-        
-    if y_obs is None:
-        y_obs = np.zeros(nday)
-    
-    x = np.linspace(1., 360., 360)
-    y = np.linspace(-90., 90., 181)
-    x_not_used, y_pos = np.meshgrid(x, y)    
-    
-    irradiance = np.zeros(nday)
-    mask_qs = np.zeros_like(B)
-    mask_fac = np.zeros_like(B)
-    mask_umb = np.zeros_like(B)
-    mask_pen = np.zeros_like(B)
-    vis = np.zeros_like(B)
-    
-    for i in range(nday):
-        
-        # Take the (~) central colatitude of the map y0, and calculate the index of the central longitude x0
-        y0 = 1. * B[i][90] # <<<<<----- THIS IS WRONG!!
-        lon = np.linspace(0, 359, 360)
-        
-        while (y0 == y0)[-1]:
-            lon = np.roll(lon, 1)
-            y0 = np.roll(y0, 1)
-        
-        equals = y0 == y0
-        N = sum(equals)
-        ind = N // 2
-        
-        if (N % 2) == 0:
-            ind2 = ind - 1
-            x1 = lon[np.where(equals)[0][ind]]
-            x2 = lon[np.where(equals)[0][ind2]]
-            
-            if np.logical_and(x1 == 0.0, x2 == 359.):
-                x0 = 359.5
-            else:
-                x0 = (x1 + x2) / 2
-        else:
-            x0 = lon[np.where(equals)[0][ind]]
-        
-        # Create the arrays of grid (I had to flip it to be correct)
-        x_lon = np.flip((np.linspace(0, 359, 360) + x0) % 360)
-        x_pos, y_not_used = np.meshgrid(x_lon, y)
-        
-        delta_lambda = abs(x_pos - x_obs[i])
-        vis[i] = isa.sun.visible(y_obs[i], y_pos, delta_lambda)
-        
-        # an observer will see only half of the sphere
-        vis[vis < 0.] = 0.
-        
-        # solid angle of each pixel in the visible disk, accounts for the reduction in the pixel area with latitude
-        mask_qs[i] = vis[i] * np.cos(np.deg2rad(y_pos))
-        
-        # filling factors multiplied with solid angle of the pixel
-        mask_fac[i] = mask_qs[i] * ff_faculae[i]
-        mask_umb[i] = mask_qs[i] * ff_umbra[i]
-        mask_pen[i] = mask_qs[i] * ff_penumbra[i]
-        
-        # Calculation of irradiance                
-        irr_qs = np.nansum(mask_qs[i] * interp_qs(vis[i]))
-        irr_fac = np.nansum(mask_fac[i] * (interp_fac(vis[i]) - interp_qs(vis[i])))
-        irr_umb = np.nansum(mask_umb[i] * (interp_um(vis[i]) - interp_qs(vis[i])))
-        irr_pen = np.nansum(mask_pen[i] * (interp_penum(vis[i]) - interp_qs(vis[i])))
-        
-        irradiance[i] = irr_qs + irr_fac + irr_umb + irr_pen
-
-    irradiance[irradiance == 0.] = np.nan
-    
-    return irradiance
 
 
 def limb_darkening_correction(data_hmi, keys):
@@ -991,6 +636,251 @@ def convert_Blos_to_Br(Blos, resolution):
     br.flat[non_zero] /= mu.flat[non_zero]
 
     return br
+
+
+########################################################################################
+
+# I don't use the following functions:
+
+def compute_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
+                    interp_um, interp_penum, x_obs, y_obs):
+    """
+    Calculation of irradiance from a full surface map of filling factors.
+    Contribution by Sowmya Krishnamurthy.
+
+    Parameters
+    ----------
+    ff_fac : 3D array
+        Filling factors of the faculae, in the shape (nday, nlat, nlon).
+    ff_umbra : 3D array
+        Filling factors of the umbra, same shape as ff_fac.
+    ff_penumbra : 3D array
+        Filling factors of the penumbra, same shape as ff_fac.
+    interp_qs : function
+        Interpolation function (flux) for the quiet Sun.
+    interp_fac : function
+        Interpolation function (flux) for the faculae.
+    interp_um : function
+        Interpolation function (flux) for the umbra.
+    interp_penum : function
+        Interpolation function (flux) for the penumbra.
+    x_obs : float
+        The longitude of the observer.
+    y_obs : float
+        The latitude of the observer.
+
+    Returns
+    -------
+    An array of len(nday).
+
+    """
+    nday, nlat, nlon = ff_faculae.shape
+    days = np.linspace(0, nday-1, nday)
+    irradiance = np.zeros(nday)
+    
+    x = np.linspace(1., 360., nlon)
+    y = np.linspace(-90., 90., nlat)
+    x_pos, y_pos = np.meshgrid(x, y)
+    
+    delta_lambda = abs(x_pos - x_obs)
+    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
+    vis[vis < 0.] = 0.                          # an observer will see only half of the sphere
+    vis_corr = vis * np.cos(np.deg2rad(y_pos))  # solid angle of each pixel in the visible disk
+
+    for i in range(nday):  
+
+        # Rotation by 13.38 degrees per day
+        lonshift = 13.38 * days[i]
+
+        # Rotated filling factors multiplied with solid angle of the pixel
+        mask_fac = vis_corr * isa.mapsetup.shift_map_longitude(ff_faculae[i], lonshift)
+        mask_umb = vis_corr * isa.mapsetup.shift_map_longitude(ff_umbra[i], lonshift)
+        mask_pen = vis_corr * isa.mapsetup.shift_map_longitude(ff_penumbra[i], lonshift)
+        
+        # Calculation of irradiance
+        irr_qs = np.nansum(vis_corr * interp_qs(vis))              
+        delta_fac = np.nansum(mask_fac * (interp_fac(vis) - interp_qs(vis)))
+        delta_umb = np.nansum(mask_umb * (interp_um(vis) - interp_qs(vis)))
+        delta_pen = np.nansum(mask_pen * (interp_penum(vis) - interp_qs(vis)))        
+
+        irradiance[i] = irr_qs + delta_fac + delta_umb + delta_pen
+
+    irradiance[irradiance == 0.] = np.nan
+    
+    return irradiance
+
+def compute_ff_grids(B_input, B_sat = 250., B_min = 60., half_number_of_steps = 4, step_size = 5.):
+    """
+    Calculation of a grid of filling factors of faculae and spots based on an input magnetic field map.
+    The grid will be centered on B_sat and B_max, with (half_number_of_steps * 2 + 1) steps.
+
+    Parameters
+    ----------
+    B_input : 2D-array
+        The magnetic field at each pixel.
+    B_sat : float, optional
+        The saturation threshold for the magnetic field of the faculae, in G. The default is 250.
+    B_min : float, optional
+        The lower cut-off value for the magnetic field of the spots, in G. The default is 60.
+    half_number_of_steps : integer, optional
+        The total number of steps in the grid is equal to half_number_of_steps * 2 + 1. The default is 4.
+    step_size : float, optional
+        The step size of the grid. The default is 5.0 G.
+    
+    Returns
+    -------
+    3 grid arrays, containing the filling factors of the faculae, umbra, and penumbra, respectively.
+
+    """
+
+    nday, nlat, nlon = B_input.shape
+    length = half_number_of_steps * 2 + 1
+    
+    grid_B_sat = np.linspace(B_sat - half_number_of_steps * step_size, B_sat + half_number_of_steps * step_size, length)
+    grid_B_min = np.linspace(B_min - half_number_of_steps * step_size, B_min + half_number_of_steps * step_size, length)
+
+    ff_faculae = np.zeros((nday, nlat, nlon, length, length))
+    ff_umbra = np.zeros_like(ff_faculae)
+    ff_penumbra = np.zeros_like(ff_faculae)
+        
+    for day in range(nday):
+        for i in range(length):
+            for j in range(length):
+                ff_faculae[day, :, :, i, j], ff_umbra[day, :, :, i, j], ff_penumbra[day, :, :, i, j] = \
+                    isa.sun.compute_filling_factors(B_input[day], grid_B_sat[i], grid_B_min[j], 700.)
+
+    return ff_faculae, ff_umbra, ff_penumbra
+
+
+def compute_irradiance_virgo(wavelengths, irradiance):
+    """ Contribution by Nina Nèmec
+        Calculation of irradiances within the VIRGO/SPM channels (blue, green and red).
+    
+   Parameters:
+        wavelengths: array
+            The array containing the wavelengths.
+        irradiance: array
+            The array containing the irradiance. Must have the same size as wavelengths.
+                    
+    Returns:
+        The irradiances in all three VIRGO channels: blue, green and red, respectively.
+    """
+
+    # Make Gaussian functions for the different VIRGO channels
+    # Blue channel
+    b = 402                 # central wavelength
+    a = 0.437               # maximum of transmissivity at central wavelength
+    fwhm = 5                # full width half maximum (nm)
+    sigma = fwhm /2.3548
+    
+    x_b = np.linspace(380, 420, num = 300)
+    y_b = a*np.exp(-(x_b-b)**2./(2*sigma**2.)) # Gaussian function with 'a' being the maximum
+    
+    # Green channel
+    b = 500
+    a = 0.417
+    fwhm = 5 
+    sigma = fwhm /2.3548
+    
+    x_g = np.linspace(480, 520, num = 300)
+    y_g = a*np.exp(-(x_g-b)**2./(2*sigma**2.))
+    
+    # Red channel
+    b = 802
+    a = 0.843
+    fwhm = 5 
+    sigma = fwhm /2.3548
+    
+    x_r = np.linspace(780, 820, num = 300)
+    y_r = a*np.exp(-(x_r-b)**2./(2*sigma**2.))
+    
+    # Create interpolation function
+    f = interp.interp1d(wavelengths, irradiance)
+    
+    blue_new = f(x_b)
+    green_new = f(x_g)
+    red_new = f(x_r)
+
+    # Multiply irradiance with filter
+
+    blue = blue_new * y_b
+    green = green_new * y_g
+    red = red_new * y_r
+    
+    # Integrate
+    
+    irr_blue = integrate.trapz(blue, x_b)
+    irr_green = integrate.trapz(green, x_g)
+    irr_red = integrate.trapz(red, x_r)
+    
+    return irr_blue, irr_green, irr_red
+
+
+def compute_flux_map(flux_quiet, flux_faculae, flux_umbra, flux_penumbra, x_obs):
+    """
+    NOT USED.
+    Computes the general irradiance of faculae and sunspots in a 11-rings circle, 
+    corrected for the corresponding solid angles of the pixels.
+
+    Parameters
+    ----------
+    flux_quiet : 1D array of length n-1.
+        Flux of the quiet Sun per ring.
+    flux_faculae : 1D array of length n-1.
+        Flux of the faculae per ring.
+    flux_umbra : 1D array of length n-1.
+        Flux of the umbra per ring.
+    flux_penumbra : 1D array of length n-1.
+        Flux of the penumbra per ring.
+ 
+    Returns
+    -------
+    Flux maps of the quiet Sun, faculae, umbra, and penumbra, respectively.
+
+    """
+    # Defining the solid angles
+    mu = [1, .95, .85, .75, .65, .55, .45, .35, .25, .15, .075, 0.0]    # The borders of the rings
+    
+    omega_sun = 6.7996873e-5            # This is used to scale it to 1 AU
+    
+    # See Methods in Nèmec et al. 2020
+    # theta = arccos(mu)
+    # omega = (theta_up - theta_low) * omega_sun
+    omega = [6.6296969e-05, 1.2239433e-05, 1.0879501e-05 , 9.5195652e-06  , 8.1596210e-06, \
+             6.7996889e-06, 5.4397487e-06, 4.0798125e-06, 2.7198764e-06, 1.1474451e-06, 3.8248306e-07]
+
+    # Defining the grid
+    x = np.linspace(1., 360., 360)
+    y = np.linspace(-90., 90., 181)
+    x_pos, y_pos = np.meshgrid(x, y)    
+
+    delta_lambda = abs(x_pos - x_obs)
+    vis = visible(0., y_pos, delta_lambda)
+    vis[vis < 0.] = 0.
+
+    # Calculating the irradiance of quiet sun, faculae and sunspots
+    flux_qs_conv = 1. * vis
+    flux_faculae_conv = 1. * vis
+    flux_umbra_conv = 1. * vis
+    flux_penumbra_conv = 1. * vis
+    
+    for i in range(len(mu) - 1):
+        upp = mu[i]
+        low = mu[i+1]
+        my_range = np.logical_and(vis <= upp, vis > low)
+        
+        flux_qs_conv[my_range] = flux_quiet[i]
+        flux_faculae_conv[my_range] = flux_faculae[i]
+        flux_umbra_conv[my_range] = flux_umbra[i]
+        flux_penumbra_conv[my_range] = flux_penumbra[i]
+    
+    # Defining the contrast
+    quiet_sun = np.sum(flux_quiet * omega)
+    delta_faculae = (flux_faculae_conv - flux_qs_conv) * omega_sun
+    delta_umbra = (flux_umbra_conv - flux_qs_conv) * omega_sun
+    delta_penumbra = (flux_penumbra_conv - flux_qs_conv) * omega_sun
+    
+    return quiet_sun, delta_faculae, delta_umbra, delta_penumbra
 
 
 ########################################################################################
