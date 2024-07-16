@@ -226,7 +226,7 @@ def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, inte
     return irradiance
     
 
-def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, interp_um, interp_penum, mu_map, RSUN_OBS, CDELT1, DSUN_ORBS):
+def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, interp_um, interp_penum, mu_map, RSUN_OBS, CDELT1, DSUN_ORBS, resolution = 4096):
     """
     Calculation of irradiance from a disc map of filling factors.
 
@@ -255,6 +255,8 @@ def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, i
         Physical increment per index value in the x direction.
     DSUN_ORBS : float
         The distance between the observer and the Sun in meters.
+    resolution : int, optional
+        The resolution of the map. Must be one of 4096, 2048, 1024, 512, 256. The default is 4096.
     
     Returns
     -------
@@ -267,6 +269,16 @@ def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, i
     solar_radius_AU = 0.00465047
     pixel_size_at_equator = solar_radius_AU / solar_radius_pixels
     solid_angle_pixel = pixel_size_at_equator**2
+    if resolution == 4096:
+        solid_angle_pixel = solid_angle_pixel
+    elif resolution == 2048:
+        solid_angle_pixel = solid_angle_pixel * 4.
+    elif resolution == 1024:
+        solid_angle_pixel = solid_angle_pixel * 16.
+    elif resolution == 512:
+        solid_angle_pixel = solid_angle_pixel * 64.
+    elif resolution == 256:
+        solid_angle_pixel = solid_angle_pixel * 256.
     AU = 1.496e11
     
     # Calculation of irradiance
@@ -411,8 +423,7 @@ def load_satire_ssi(file, n_days, start_year = 2010, start_month = 6, start_day 
         Array of wavelengths.
 
     """
-    df = pd.read_csv(file, skiprows = 29, names = ['julian', 'bin_lower', 'bin_upper', 'SSI', 'index'],
-                      delim_whitespace = True, skipinitialspace = True, infer_datetime_format = True)
+    df = pd.read_csv(file, skiprows = 29, names = ['julian', 'bin_lower', 'bin_upper', 'SSI', 'index'], delim_whitespace = True, skipinitialspace = True, infer_datetime_format = True)
 
     julian_days  = np.array(df.julian)
     wl_lower0 = np.array(df.bin_lower)
