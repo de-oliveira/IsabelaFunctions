@@ -166,8 +166,7 @@ def visible(y_obs, y_pos, delta_lambda):
                  np.cos(np.deg2rad(y_obs)) * np.cos(np.deg2rad(y_pos)) * np.cos(np.deg2rad(delta_lambda)))
 
 
-def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac,
-                    interp_um, interp_penum, x_obs, y_obs, grid = 1):
+def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, interp_um, interp_penum, x_obs, y_obs, grid = 1):
     """
     Calculation of irradiance from a full surface map of filling factors. Considers that the fluxes are already in physical units (see read_fluxes function).
     Contribution by Sowmya Krishnamurthy.
@@ -202,7 +201,7 @@ def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, inte
 
     """
     x = np.linspace(1., 360., 360 * grid)
-    y = np.linspace(-90., 90., 181 * grid)
+    y = np.linspace(-90., 90., 180 * grid)
     x_pos, y_pos = np.meshgrid(x, y)
     
     delta_lambda = abs(x_pos - x_obs)
