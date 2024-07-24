@@ -97,7 +97,7 @@ def compute_interpolations(flux, angles, number_of_wavelengths):
     return interpolation_function
 
 
-def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 700., umbra = 0.2, penumbra = 0.8):
+def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 700., umbra = 0.2, penumbra = 0.8, disc_with_zeros = False):
     """
     Calculation of filling factors of faculae and spots based on an input magnetic field map.
     
@@ -115,6 +115,8 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
         The ratio of umbra in the spots, between 0 and 1. The default is 0.2.
     penumbra : float, optional
         The ratio of penumbra in the spots, between 0 and 1. The default is 0.8.
+    disc_with_zeros : bool, optional
+        If True, the bins outside the full-disc magnetogram will be set to zero. If False, they will be set to np.nan. The default is False.
 
     Returns
     -------
@@ -141,12 +143,21 @@ def compute_filling_factors(B_input, sat_fac = 250., min_spot = 60., max_spot = 
     ff_faculae[ff_spots != 0.] = 0.
     
     # Ignoring bins outside full-disc magnetogram
-    ff_faculae[B_input == 0] = np.nan
-    ff_faculae[np.where(np.isnan(B_input))] = np.nan
-    ff_umbra[B_input == 0] = np.nan
-    ff_umbra[np.where(np.isnan(B_input))] = np.nan
-    ff_penumbra[B_input == 0] = np.nan
-    ff_penumbra[np.where(np.isnan(B_input))] = np.nan
+    if disc_with_zeros:
+        ff_faculae[B_input == 0] = 0.
+        ff_faculae[np.where(np.isnan(B_input))] = 0.
+        ff_umbra[B_input == 0] = 0.
+        ff_umbra[np.where(np.isnan(B_input))] = 0.
+        ff_penumbra[B_input == 0] = 0.
+        ff_penumbra[np.where(np.isnan(B_input))] = 0.
+    
+    else:
+        ff_faculae[B_input == 0] = np.nan
+        ff_faculae[np.where(np.isnan(B_input))] = np.nan
+        ff_umbra[B_input == 0] = np.nan
+        ff_umbra[np.where(np.isnan(B_input))] = np.nan
+        ff_penumbra[B_input == 0] = np.nan
+        ff_penumbra[np.where(np.isnan(B_input))] = np.nan
 
     return ff_faculae, ff_umbra, ff_penumbra
 
@@ -225,7 +236,7 @@ def compute_simple_irradiance(ff_faculae, ff_umbra, ff_penumbra, interp_qs, inte
     return irradiance
     
 
-def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, interp_um, interp_penum, mu_map, RSUN_OBS, CDELT1, DSUN_ORBS, resolution = 4096):
+def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, interp_fac, interp_um, interp_penum, RSUN_OBS, CDELT1, DSUN_ORBS, mu_map):
     """
     Calculation of irradiance from a disc map of filling factors.
 
@@ -246,16 +257,14 @@ def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, i
         Interpolation function (flux) for the umbra.
     interp_penum : function
         Interpolation function (flux) for the penumbra.
-    mu_map : 2D array
-        The map of the cosine of the heliocentric angle (mu = cos(theta)). Can be created by create_map_mu_for_solar_disc.
     RSUN_OBS : float
         The angular radius of the Sun in arc-sec.
     CDELT1 : float
         Physical increment per index value in the x direction.
     DSUN_ORBS : float
         The distance between the observer and the Sun in meters.
-    resolution : int, optional
-        The resolution of the map. Must be one of 4096, 2048, 1024, 512, 256. The default is 4096.
+    mu_map : 2D array
+        The map of mu values (cosine of the heliocentric angle).
     
     Returns
     -------
@@ -265,29 +274,24 @@ def compute_irradiance_from_disc(ff_faculae, ff_umbra, ff_penumbra, interp_qs, i
     """
     # Conversion to physical units
     solar_radius_pixels = RSUN_OBS / CDELT1
+    resolution = ff_faculae.shape[-1]
+    resolution_factor = 4096 / resolution
     solar_radius_AU = 0.00465047
-    pixel_size_at_equator = solar_radius_AU / solar_radius_pixels
-    solid_angle_pixel = pixel_size_at_equator**2
-    if resolution == 4096:
-        solid_angle_pixel = solid_angle_pixel
-    elif resolution == 2048:
-        solid_angle_pixel = solid_angle_pixel * 4.
-    elif resolution == 1024:
-        solid_angle_pixel = solid_angle_pixel * 16.
-    elif resolution == 512:
-        solid_angle_pixel = solid_angle_pixel * 64.
-    elif resolution == 256:
-        solid_angle_pixel = solid_angle_pixel * 256.
-    AU = 1.496e11
+    one_AU = 1.496e11
     
-    # Calculation of irradiance
-    irr_qs = np.nansum(mu_map * interp_qs(mu_map) * solid_angle_pixel)              
-    delta_fac = np.nansum(ff_faculae * (interp_fac(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
-    delta_umb = np.nansum(ff_umbra * (interp_um(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
-    delta_pen = np.nansum(ff_penumbra * (interp_penum(mu_map) - interp_qs(mu_map)) * solid_angle_pixel)
+    pixel_size_at_equator = solar_radius_AU / solar_radius_pixels
+    solid_angle_pixel = pixel_size_at_equator**2 * resolution_factor**2
 
-    irradiance = irr_qs + delta_fac + delta_umb + delta_pen
-    irradiance /= DSUN_ORBS**2 / AU**2
+    # Calculation of irradiance
+    quiet_sun = interp_qs(mu_map)
+    delta_fac = interp_fac(mu_map) - quiet_sun
+    delta_umb = interp_um(mu_map) - quiet_sun
+    delta_pen = interp_penum(mu_map) - quiet_sun
+
+    irr_qs = np.sum(interp_qs(mu_map))
+    delta = np.nansum(ff_faculae * delta_fac + ff_umbra * delta_umb + ff_penumbra * delta_pen)
+
+    irradiance = (irr_qs + delta) * solid_angle_pixel / (DSUN_ORBS/one_AU)**2
     return irradiance
 
 
@@ -583,7 +587,7 @@ def degrade_image(data, new_res):
     return interpolating_function((xv, yv))
 
            
-def create_map_mu_for_solar_disc(n_pixels, radius):
+def create_map_mu_for_solar_disc(n_pixels, radius, x0, y0):
     """
     Creates a map of mu values (mu = cosine(heliocentric angle)) for a solar disc.
 
@@ -593,6 +597,10 @@ def create_map_mu_for_solar_disc(n_pixels, radius):
         The desired number of pixels in one row in the map.
     radius : float
         The radius of the solar disc, in pixels.
+    x0 : float
+        The x-coordinate of the center of the disc.
+    y0 : float
+        The y-coordinate of the center of the disc.
 
     Returns
     -------
@@ -600,27 +608,22 @@ def create_map_mu_for_solar_disc(n_pixels, radius):
         The map of mu values, with size n_pixels x n_pixels.
 
     """
-    x0 = n_pixels // 2
-    y0 = n_pixels // 2
-
-    #mu = [1, .95, .85, .75, .65, .55, .45, .35, .25, .15, .075, 0.0]
-    mu = np.linspace(1, 0, 101)
-    mu_inverted = mu[::-1]
+    mu = [1, .95, .85, .75, .65, .55, .45, .35, .25, .15, .075, 0.0]
     mu_map = np.zeros((n_pixels, n_pixels))
 
-    for i in range(len(mu)):
-        r = mu[i] * radius
+    for i in range(len(mu)-1, -1, -1):
+        r = np.sqrt(1 - mu[i]**2) * radius
         [X, Y] = np.mgrid[0:n_pixels, 0:n_pixels]
         xpr = X - x0
         ypr = Y - y0
 
         reconstruction_circle = (xpr ** 2 + ypr ** 2) <= r ** 2
-        mu_map[reconstruction_circle] = mu_inverted[i]
+        mu_map[reconstruction_circle] = mu[i]
     
     return mu_map
 
 
-def convert_Blos_to_Br(Blos, resolution):
+def convert_Blos_to_Br(Blos, mu_map):
     """
     Converts a map of the magnetic field strength in the line of sight to a map of the radial magnetic field, by dividing it by the cosine of the heliocentric angle.
 
@@ -628,8 +631,8 @@ def convert_Blos_to_Br(Blos, resolution):
     ----------
     Blos : 2D array
         The magnetic field strength in the line of sight.
-    resolution : int
-        The resolution of the map.
+    mu_map : 2D array
+        The map of mu values (mu = cosine(heliocentric angle)).
 
     Returns
     -------
@@ -637,14 +640,11 @@ def convert_Blos_to_Br(Blos, resolution):
         The approximate radial magnetic field.
 
     """
-    radius = int(resolution / 2)
-    mu = create_map_mu_for_solar_disc(resolution, radius)
     br = 1.0 * Blos
 
     # Dividing by mu to convert Blos to Br (only where mu is not zero)
-    non_zero = np.where(mu.flat)
-    br.flat[non_zero] /= mu.flat[non_zero]
-
+    non_zero = np.where(mu_map.flat)
+    br.flat[non_zero] /= mu_map.flat[non_zero]
     return br
 
 

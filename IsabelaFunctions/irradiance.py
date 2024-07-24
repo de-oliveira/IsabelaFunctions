@@ -136,13 +136,13 @@ class ContinuumData:
 
 class FillingFactors:
      
-     def __init__(self, data_mag, sat_fac = 250., min_spot = 60., max_spot = 700.):
+     def __init__(self, data_mag, sat_fac = 250., min_spot = 60., max_spot = 700., disc_with_zeros = False):
          ff_faculae = np.empty_like(data_mag)
          ff_umbra = np.empty_like(data_mag)
          ff_penumbra = np.empty_like(data_mag)
 
          for i in range(data_mag.shape[0]):
-             ff_faculae[i], ff_umbra[i], ff_penumbra[i] = sun.compute_filling_factors(data_mag[i], sat_fac, min_spot, max_spot)
+             ff_faculae[i], ff_umbra[i], ff_penumbra[i] = sun.compute_filling_factors(data_mag[i], sat_fac, min_spot, max_spot, disc_with_zeros = disc_with_zeros)
 
          self.faculae = ff_faculae
          self.umbra = ff_umbra
