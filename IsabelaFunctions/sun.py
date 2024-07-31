@@ -374,6 +374,74 @@ def compute_s_index(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, 
     return s_index
 
 
+def compute_simple_sindex(ff_faculae, interp_qsh, interp_qsk, interp_qsr, interp_qsv, interp_fach, interp_fack, interp_facr, interp_facv, x_obs, y_obs):
+    """
+    Calculation of s-index from a full surface map of filling factors. Considers that the fluxes are already in physical units (see read_fluxes function).
+    Contribution by Sowmya Krishnamurthy.
+
+
+    Parameters
+    ----------
+    ff_faculae : 2D array
+        Filling factors of the faculae of shape (lat,lon).
+    interp_qsh : function
+        Interpolation function (flux) for the quiet Sun, for Ca II H line.
+    interp_qsk : function
+        Interpolation function (flux) for the quiet Sun, for Ca II K line.
+    interp_qsr : function
+        Interpolation function (flux) for the quiet Sun, for Ca II R band.
+    interp_qsv : function
+        Interpolation function (flux) for the quiet Sun, for Ca II V band.
+    interp_fach : function
+        Interpolation function (flux) for the faculae, for Ca II H line.
+    interp_fack : function
+        Interpolation function (flux) for the faculae, for Ca II K line.
+    interp_facr : function
+        Interpolation function (flux) for the faculae, for Ca II R band.
+    interp_facv : function
+        Interpolation function (flux) for the faculae, for Ca II V band.
+    x_obs : float
+        The longitude of the observer.
+    y_obs : float
+        The latitude of the observer.
+
+    Returns
+    -------
+    s_index : float
+
+    """
+    x = np.linspace(1., 360., 360)
+    y = np.linspace(-90., 90., 180)
+    x_pos, y_pos = np.meshgrid(x, y)
+    
+    delta_lambda = abs(x_pos - x_obs)
+    vis = isa.sun.visible(y_obs, y_pos, delta_lambda)
+    vis[vis < 0.] = 0.
+    vis_corr = vis * np.cos(np.deg2rad(y_pos))
+
+    mask_fac = vis_corr * ff_faculae
+
+    qsh = np.nansum(vis_corr * interp_qsh(vis))
+    qsk = np.nansum(vis_corr * interp_qsk(vis))
+    qsr = np.nansum(vis_corr * interp_qsr(vis))
+    qsv = np.nansum(vis_corr * interp_qsv(vis))
+    
+    delta_fach = np.nansum(mask_fac * 3.2 * (interp_fach(vis) - interp_qsh(vis)))
+    delta_fack = np.nansum(mask_fac * 3.2 * (interp_fack(vis) - interp_qsk(vis)))
+    delta_facr = np.nansum(mask_fac * (interp_facr(vis) - interp_qsr(vis)))
+    delta_facv = np.nansum(mask_fac * (interp_facv(vis) - interp_qsv(vis)))
+    
+    fluxh = qsh + delta_fach
+    fluxk = qsk + delta_fack
+    fluxr = qsr + delta_facr
+    fluxv = qsv + delta_facv
+    
+    fluxratio = (fluxh + fluxk) / (fluxr + fluxv)
+    s_index = 2.53 * 8. * fluxratio
+
+    return s_index
+
+
 def compute_tsi_from_ssi(ssi, wavelengths, number_of_days):
     """
     Computes total solar irradiance from spectral solar irradiance.
