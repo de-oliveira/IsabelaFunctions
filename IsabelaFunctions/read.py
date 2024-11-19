@@ -9,7 +9,7 @@ from scipy.interpolate import RegularGridInterpolator as rgi
 import glob
 import os
 import pandas as pd
-
+import matplotlib.pyplot as plt
 
 def ccati_file(path, file, variable, ndata = True, mean = False):
     """"
